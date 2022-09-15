@@ -73,7 +73,8 @@ typedef enum {
 #define DRAW_FLAG_NF 0x01
 #define DRAW_FLAG_IR 0x02
 
-typedef struct {
+class fftcodec {
+public:
 	unsigned int m_nfftsize;
 	double m_fsamplerate;
 	//
@@ -90,7 +91,7 @@ typedef struct {
 	sync_mode_t   m_sync_mode;
 	double        m_delta_fv;
 	double        m_error;
-	vsample_t*    m_pvsample;
+    vsample*      m_pvsample;
 	long          m_irx;
 	long          m_irxframe;
 	double*       m_rx_raw;
@@ -145,27 +146,32 @@ typedef struct {
 	std::complex<double>* m_draw_data_x;
 	std::complex<double>* m_draw_data_X;
     std::complex<double>* m_draw_data_impulse;
-} fftcodec_t;
 
-fftcodec_t* fftcodec_create( int p_nfftsize, int p_fsamplerate );
+public:
+    fftcodec(int nfftsize, int fsamplerate);
+    ~fftcodec();
 
-void fftcodec_store_sample( fftcodec_t* p_pfftcodec, double p_val );
-double fftcodec_read_sample( fftcodec_t* p_pfftcodec );
-void fftcodec_sync( fftcodec_t* p_pfftcodec );
-void fftcodec_codec_mode( fftcodec_t* p_pfftcodec, codec_mode_t p_mode );
+    void store_sample( double p_val );
+    double read_sample();
+    void sync();
+    void codec_mode( codec_mode_t p_mode );
+private:
+    void encode_spectrum();
+    void decode_spectrum();
+    void update_codec_mode();
+    void init_codec_mode();
+    void init_rx_mode( rx_mode_t p_rxmode );
+    void init_tx_mode( tx_mode_t p_txmode );
+    const char* draw_mode_string();
+    const char* codec_mode_string();
+    const char* rx_mode_string();
+    const char* tx_mode_string();
+public:
+    void draw_init( Display* p_pDisplay );
+    void draw( int p_width, int p_height );
 
-void fftcodec_encode_spectrum( fftcodec_t* p_pfftcodec );
-void fftcodec_decode_spectrum( fftcodec_t* p_pfftcodec );
-void fftcodec_update_codec_mode ( fftcodec_t* p_pfftcodec );
-void fftcodec_init_codec_mode( fftcodec_t* p_pfftcodec );
-void fftcodec_init_rx_mode( fftcodec_t* p_pfftcodec, rx_mode_t p_rxmode );
-void fftcodec_init_tx_mode( fftcodec_t* p_pfftcodec, tx_mode_t p_txmode );
-const char* fftcodec_draw_mode_string( fftcodec_t* p_pfftcodec );
-const char* fftcodec_codec_mode_string( fftcodec_t* p_pfftcodec );
-const char* fftcodec_rx_mode_string( fftcodec_t* p_pfftcodec );
-const char* fftcodec_tx_mode_string( fftcodec_t* p_pfftcodec );
-void fftcodec_draw_init( fftcodec_t* p_pfftcodec, Display* p_pDisplay );
-void fftcodec_draw( fftcodec_t* p_pfftcodec, int p_width, int p_height );
+};
+
 void color_set( GLdouble* p_v, double p_r, double p_g, double p_b );
 void color_set_hsv( GLdouble* p_c, double p_h, double p_s, double p_v );
 void spectrum_stats( std::complex<double>* src, double* p_pmean, double* p_prms, long p_nfftsize, long p_nframes );

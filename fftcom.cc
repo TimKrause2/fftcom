@@ -35,7 +35,7 @@ jack_port_t*       g_pporttx;
 jack_ringbuffer_t* g_prbtx;
 sem_t              g_sem_process;
 pthread_t          g_pthread_process;
-fftcodec_t*        g_pfftcodec;
+fftcodec*          g_pfftcodec;
 
 Display* g_pDisplay;
 Window   g_window;
@@ -53,7 +53,7 @@ int g_shiftl=0;
 void synthesize_tx_data( void ){
 	int l_samplesize = sizeof(jack_default_audio_sample_t);
 	while( jack_ringbuffer_write_space(g_prbtx) >= l_samplesize ){
-		jack_default_audio_sample_t l_x = fftcodec_read_sample( g_pfftcodec );
+        jack_default_audio_sample_t l_x = g_pfftcodec->read_sample( );
 		jack_ringbuffer_write(g_prbtx,(char*)&l_x,l_samplesize);
 	}
 }
@@ -72,7 +72,7 @@ void* process_thread(void* p_arg)
 		while( jack_ringbuffer_read_space(g_prbrx) >= l_samplesize ){
 			jack_default_audio_sample_t l_x;
 			jack_ringbuffer_read(g_prbrx,(char*)&l_x,l_samplesize);
-			fftcodec_store_sample( g_pfftcodec, l_x );
+            g_pfftcodec->store_sample( l_x );
 		}
 	}
 	printf("process_thread exiting\n");
@@ -88,22 +88,22 @@ void KeyPressEvaluate(XKeyEvent* p_event)
         g_process=0;
         break;
     case XK_F1:
-        fftcodec_codec_mode( g_pfftcodec, CODEC_MODE_IDLE );
+        g_pfftcodec->codec_mode( CODEC_MODE_IDLE );
         break;
     case XK_F2:
-        fftcodec_codec_mode( g_pfftcodec, CODEC_MODE_IMPULSE_TEST );
+        g_pfftcodec->codec_mode( CODEC_MODE_IMPULSE_TEST );
         break;
     case XK_F3:
-        fftcodec_codec_mode( g_pfftcodec, CODEC_MODE_SWEEP_TEST );
+        g_pfftcodec->codec_mode( CODEC_MODE_SWEEP_TEST );
         break;
     case XK_F4:
-        fftcodec_codec_mode( g_pfftcodec, CODEC_MODE_NOISE_FLOOR );
+        g_pfftcodec->codec_mode( CODEC_MODE_NOISE_FLOOR );
         break;
     case XK_F5:
-        fftcodec_codec_mode( g_pfftcodec, CODEC_MODE_IMPULSE_RESPONSE );
+        g_pfftcodec->codec_mode( CODEC_MODE_IMPULSE_RESPONSE );
         break;
     case XK_F6:
-        fftcodec_codec_mode( g_pfftcodec, CODEC_MODE_SYNC_ONLY );
+        g_pfftcodec->codec_mode( CODEC_MODE_SYNC_ONLY );
         break;
     case XK_n:
     case XK_N:
@@ -564,14 +564,14 @@ int main(int p_narg, char** p_argv)
 	// register the output port
 	g_pporttx = jack_port_register( g_pclient, "tx", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
-	g_pfftcodec = fftcodec_create( FFTSIZE, g_samplerate );
+    g_pfftcodec = new fftcodec( FFTSIZE, g_samplerate );
 
 	if( !g_pfftcodec ){
 		printf("FFTCodec creation failed\n");
 		goto clean_up_and_exit;
 	}
 	
-	fftcodec_draw_init( g_pfftcodec, g_pDisplay );
+    g_pfftcodec->draw_init( g_pDisplay );
 	
 	start_thread();
 	
@@ -606,7 +606,7 @@ int main(int p_narg, char** p_argv)
 		}
 		if(!g_process)
 			break;
-		fftcodec_draw( g_pfftcodec, g_width, g_height );
+        g_pfftcodec->draw( g_width, g_height );
 		glXSwapBuffers( g_pDisplay, g_window );
 	}
 
