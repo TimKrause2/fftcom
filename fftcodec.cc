@@ -1,17 +1,18 @@
-#include <math.h>
+#include <cmath>
 //#include <complex.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include "fftcodec.h"
-#include "font.h"
+#include <glm/gtx/color_space.hpp>
 
-FreeTypeFont g_font;
+//FreeTypeFont g_font;
 
 fftcodec::fftcodec( int p_nfftsize, int p_fsamplerate )
 {
     m_nfftsize = p_nfftsize;
+    m_nspecsize = p_nfftsize/2+1;
     m_fsamplerate = p_fsamplerate;
 	//
 	// codec initialization
@@ -85,9 +86,37 @@ fftcodec::fftcodec( int p_nfftsize, int p_fsamplerate )
     m_draw_db_min = -180.0;
     m_draw_db_max =  5.0;
     m_draw_time_max = 1.0;
+    m_draw_abs_max = 1.0;
     m_draw_data_x = (std::complex<double>*)fftw_malloc( sizeof(std::complex<double>) * p_nfftsize );
     m_draw_data_X = (std::complex<double>*)fftw_malloc( sizeof(std::complex<double>) * p_nfftsize );
     m_draw_data_impulse = (std::complex<double>*)fftw_malloc( sizeof(std::complex<double>) * p_nfftsize );
+    m_graphy = new float[p_nfftsize];
+
+    m_timeColor1 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_TIME1,SAT_TIME1,VAL_TIME1)),
+                1.0);
+    m_timeColor0 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_TIME0,SAT_TIME0,VAL_TIME0)),
+                1.0);
+    m_freqColor1 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_FREQ1,SAT_FREQ1,VAL_FREQ1)),
+                1.0);
+    m_freqColor0 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_FREQ0,SAT_FREQ0,VAL_FREQ0)),
+                1.0);
+    m_nfColor1 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_NF1,SAT_NF1,VAL_NF1)),
+                1.0);
+    m_nfColor0 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_NF0,SAT_NF0,VAL_NF0)),
+                1.0);
+    m_irColor1 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_IR1,SAT_IR1,VAL_IR1)),
+                1.0);
+    m_irColor0 = glm::vec4(
+                glm::rgbColor(glm::vec3(HUE_IR0,SAT_IR0,VAL_IR0)),
+                1.0);
+
 }
 
 void fftcodec::store_sample( double p_val )
@@ -504,20 +533,27 @@ void fftcodec::update_codec_mode(  )
 
 void fftcodec::draw_init( Display* p_pDisplay )
 {
-	g_font.LoadOutline("UbuntuMono-R.ttf", 12, Pixel32(0,0,0), Pixel32(128,128,128), 1.5);
-    m_text_height = 12;
-	GLenum l_error;
-	do{
-	}while( (l_error=glGetError())!=GL_NO_ERROR );
-	double l_range[2];
-	glGetDoublev( GL_SMOOTH_POINT_SIZE_RANGE, l_range );
-	l_error = glGetError();
-	if( l_error == GL_NO_ERROR ){
-		printf("Smooth Point size range:%f  %f\n",l_range[0],l_range[1]);
-	}else{
-		printf("glGetDoublev error:%d\n",l_error);
-	}
+//    g_font.LoadOutline("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", 12, Pixel32(0,0,0), Pixel32(128,128,128), 1.5);
+    int hdots = DisplayHeight(p_pDisplay, 0);
+    int hmm = DisplayHeightMM(p_pDisplay, 0);
 
+    m_text_height = hdots*5/hmm;
+
+    float lineWidth1 = ceil((float)hdots/hmm*0.25);
+    float lineWidth0 = lineWidth1*3.0;
+    glm::vec4 baseColor(0.0, 0.0, 0.0, 1.0);
+    glm::vec4 outlColor(1.0, 1.0, 1.0, 1.0);
+    m_font = new FreeTypeFont();
+    m_font->LoadOutline("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf",
+                        m_text_height,
+                        baseColor,
+                        outlColor,
+                        lineWidth1);
+
+    m_timegraph = new LGraph(m_nfftsize);
+    m_timegraph->SetLineWidths(lineWidth0, lineWidth1);
+    m_specgraph = new LGraph(m_nspecsize);
+    m_specgraph->SetLineWidths(lineWidth0, lineWidth1);
 }
 
 const char* fftcodec::draw_mode_string(  )
@@ -600,140 +636,104 @@ void fftcodec::draw( int p_width, int p_height )
 	std::complex<double>* l_psrcx;
 	std::complex<double>* l_psrcX;
     switch( m_draw_src ){
-		case DRAW_SRC_RX:
-            l_psrcx = m_rx_x;
-            l_psrcX = m_rx_X;
-			break;
-		case DRAW_SRC_TX:
-            l_psrcx = m_tx_x;
-            l_psrcX = m_tx_X;
-			break;
+    case DRAW_SRC_RX:
+        l_psrcx = m_rx_x;
+        l_psrcX = m_rx_X;
+        break;
+    case DRAW_SRC_TX:
+        l_psrcx = m_tx_x;
+        l_psrcX = m_tx_X;
+        break;
+    case DRAW_SRC_IMPULSE:
+        l_psrcx = m_rx_impulse;
+        l_psrcX = m_rx_Impulse;
+        break;
 	}
     pthread_mutex_lock( &m_codec_mutex );
     spectrum_copy( l_psrcx, m_draw_data_x, m_nfftsize );
     spectrum_copy( l_psrcX, m_draw_data_X, m_nfftsize );
-    spectrum_copy( m_rx_impulse, m_draw_data_impulse, m_nfftsize );
     pthread_mutex_unlock( &m_codec_mutex );
     l_psrcx = m_draw_data_x;
     l_psrcX = m_draw_data_X;
 	std::complex<double>* l_pval;
 	long n,i,N;
 	GLdouble l_color[3];
-    long l_npoints = m_nfftsize/2 + 1;
-	glDrawBuffer(GL_BACK);
-	glClearColor( 0.0, 0.0, 0.0, 0.0 );
+    glDrawBuffer(GL_BACK);
+    glClearColor( 0.0, 0.0, 0.0, 1.0 );
 	glClear( GL_COLOR_BUFFER_BIT );
-	glEnable( GL_LINE_SMOOTH );
 	glEnable( GL_BLEND );
 	glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 	glViewport( 0, 0, (GLsizei)p_width, (GLsizei)p_height );
-	glColor3d( 1.0, 1.0, 1.0 );
-	glHint( GL_LINE_SMOOTH_HINT, GL_NICEST );
-	glHint( GL_POINT_SMOOTH_HINT, GL_NICEST );
     switch( m_draw_mode ){
     case DRAW_MODE_TIME:
-        glMatrixMode( GL_PROJECTION );
-        glLoadIdentity();
-        gluOrtho2D( 0.0, 1.0, -m_draw_time_max, m_draw_time_max );
-        glMatrixMode( GL_MODELVIEW );
-        glLoadIdentity();
-        l_pval = l_psrcx;
-        glColor4d( 0.5, 1.0, 0.5, 1.0 );
-        glBegin( GL_LINE_STRIP );
+        m_timegraph->SetLimits(m_draw_time_max, -m_draw_time_max);
+        m_timegraph->SetColors(m_timeColor0, m_timeColor1);
         for(n=0;n<m_nfftsize;n++){
-            double l_x = (double)n/(m_nfftsize-1);
-            double l_y = std::real(*l_pval);
-            glVertex2d( l_x, l_y );
-            l_pval++;
+            m_graphy[n] = std::real(l_psrcx[n]);
         }
-        glEnd();
-        glColor3d(1.0,1.0,1.0);
-        g_font.Printf( 0, p_height - m_text_height, "Scale:%7.5f", m_draw_time_max );
+        m_timegraph->Draw(m_graphy);
+        m_font->Printf(0,0,"Scale:%f",m_draw_time_max);
         break;
 
     case DRAW_MODE_IMPULSE:
-        glMatrixMode( GL_PROJECTION );
-        glLoadIdentity();
-        gluOrtho2D( 0.0, 1.0, -m_draw_time_max, m_draw_time_max );
-        glMatrixMode( GL_MODELVIEW );
-        glLoadIdentity();
-        l_pval = m_draw_data_impulse;
-        glColor4d( 0.5, 1.0, 0.5, 0.5 );
-        glBegin( GL_LINE_STRIP );
-        for(n=0;n<m_nfftsize;n++){
-            double l_x = (double)n/(m_nfftsize-1);
-            double l_y = std::real(*l_pval);
-            glVertex2d( l_x, l_y );
-            l_pval++;
-        }
-        glEnd();
-        glColor3d(1.0,1.0,1.0);
-// 			sprintf( l_str, "Scale:%7.5f", m_draw_time_max );
-// 			glWindowPos2i( (GLint)0, (GLint)0 );
-// 			glListBase( g_font_base );
-// 			glCallLists( strlen(l_str), GL_UNSIGNED_BYTE, (GLubyte*) l_str );
-        g_font.Printf( 0, p_height - m_text_height, "Scale:%7.5f", m_draw_time_max );
         break;
 
     case DRAW_MODE_FREQUENCY_ABS_LINEAR:
-        glMatrixMode( GL_PROJECTION );
-        glLoadIdentity();
-        gluOrtho2D( 0.0, 1.0, 0.0, 1.0 );
-        glMatrixMode( GL_MODELVIEW );
-        glLoadIdentity();
+        m_specgraph->SetLimits(m_draw_abs_max, 0.0);
+        m_specgraph->SetColors(m_freqColor0, m_freqColor1);
         // draw the spectrum
-        spectrum_draw_abs( l_psrcX, l_npoints );
+        spectrum_draw_abs( l_psrcX );
         // draw the noise floor
         if( m_codec_flags&CODEC_FLAG_NF_COMPLETE ){
             if( m_draw_flags&DRAW_FLAG_NF ){
                 // draw the noise floor
-                glColor3d( 1.0, 0.5, 1.0 );
-                dspectrum_draw_abs( m_rx_nf_mean, l_npoints );
-                dspectrum_draw_abs( m_rx_nf_rms, l_npoints );
+                m_specgraph->SetColors(m_nfColor0, m_nfColor1);
+                dspectrum_draw_abs( m_rx_nf_mean );
             }
         }
         // draw the impulse response
         if( m_codec_flags&CODEC_FLAG_IR_COMPLETE ){
             if( m_draw_flags&DRAW_FLAG_IR ){
                 // draw the impulse response
-                glColor3d( 0.5, 1.0, 1.0 );
-                dspectrum_draw_abs( m_rx_ir_mean, l_npoints );
-                dspectrum_draw_abs( m_rx_ir_rms, l_npoints );
+                m_specgraph->SetColors(m_irColor0, m_irColor1);
+                dspectrum_draw_abs( m_rx_ir_mean );
             }
         }
+        m_font->Printf(0, p_height - m_text_height*2,
+                       "Scale:%f", m_draw_abs_max);
         break;
 
     case DRAW_MODE_FREQUENCY_ABS_LOG:
-        glMatrixMode( GL_PROJECTION );
-        glLoadIdentity();
-        gluOrtho2D( 0.0, 1.0, m_draw_db_min, m_draw_db_max );
-        glMatrixMode( GL_MODELVIEW );
-        glLoadIdentity();
-        spectrum_draw_log( l_psrcX, l_npoints );
+//        glMatrixMode( GL_PROJECTION );
+//        glLoadIdentity();
+//        gluOrtho2D( 0.0, 1.0, m_draw_db_min, m_draw_db_max );
+//        glMatrixMode( GL_MODELVIEW );
+//        glLoadIdentity();
+        m_specgraph->SetLimits(m_draw_db_max, m_draw_db_min);
+        m_specgraph->SetColors(m_freqColor0, m_freqColor1);
+        spectrum_draw_log( l_psrcX );
         // draw the noise floor
         if( m_codec_flags&CODEC_FLAG_NF_COMPLETE ){
             if( m_draw_flags&DRAW_FLAG_NF ){
                 // draw the noise floor
-                glColor3d( 1.0, 0.5, 1.0 );
-                dspectrum_draw_log_bounds( m_rx_nf_mean, m_rx_nf_rms, l_npoints );
+//                glColor3d( 1.0, 0.5, 1.0 );
+                m_specgraph->SetColors(m_nfColor0, m_nfColor1);
+                dspectrum_draw_log_bounds( m_rx_nf_mean, m_rx_nf_rms );
             }
         }
         // draw the impulse response
         if( m_codec_flags&CODEC_FLAG_IR_COMPLETE ){
             if( m_draw_flags&DRAW_FLAG_IR ){
                 // draw the impulse response
-                glColor3d( 0.5, 1.0, 1.0 );
-                dspectrum_draw_log_bounds( m_rx_ir_mean, m_rx_ir_rms, l_npoints );
+//                glColor3d( 0.5, 1.0, 1.0 );
+                m_specgraph->SetColors(m_irColor0, m_irColor1);
+                dspectrum_draw_log_bounds( m_rx_ir_mean, m_rx_ir_rms );
             }
         }
-        glColor3d(1.0,1.0,1.0);
-// 			sprintf( l_str, "dB max:%5.1f dB min:%5.1f", m_draw_db_max, m_draw_db_min );
-// 			glWindowPos2i( (GLint)0, (GLint)0 );
-// 			glListBase( g_font_base );
-// 			glCallLists( strlen(l_str), GL_UNSIGNED_BYTE, (GLubyte*) l_str );
-        g_font.Printf( 0, p_height - m_text_height,
-                                    "dB max:%5.1f dB min:%5.1f", m_draw_db_max,
-                                    m_draw_db_min );
+//        g_font.Printf( 0, p_height - m_text_height,
+        m_font->Printf( 0, 0,
+                        "dB max:%5.1f dB min:%5.1f", m_draw_db_max,
+                        m_draw_db_min );
         break;
 
     case DRAW_MODE_FREQUENCY_CONSTELLATION:
@@ -759,27 +759,14 @@ void fftcodec::draw( int p_width, int p_height )
             l_pval++;
         }
         glEnd();
-        glColor3d(1.0,1.0,1.0);
-// 			sprintf( l_str, "Scale:%8.6f MRA:%+8.6f", m_draw_constellation_max, m_rx_Xargmean );
-// 			glWindowPos2i( (GLint)0, (GLint)0 );
-// 			glListBase( g_font_base );
-// 			glCallLists( strlen(l_str), GL_UNSIGNED_BYTE, (GLubyte*) l_str );
-        g_font.Printf( 0, p_height - m_text_height, "Scale:%8.6f MRA:%+8.6f",
-                                    m_draw_constellation_max,
-                           m_rx_Xargmean );
+//        g_font.Printf( 0, p_height - m_text_height, "Scale:%8.6f MRA:%+8.6f",
+//                                    m_draw_constellation_max,
+//                           m_rx_Xargmean );
         break;
 	}
 	// draw the title information
-	glColor3d(1.0,1.0,1.0);
-// 	sprintf( l_str, "Modes Draw:%s CODEC:%s RX:%s TX:%s",
-// 					 fftcodec_draw_mode_string( p_pfftcodec ),
-// 					 fftcodec_codec_mode_string( p_pfftcodec ),
-// 					 fftcodec_rx_mode_string( p_pfftcodec ),
-// 					 fftcodec_tx_mode_string( p_pfftcodec ) );
-// 	glWindowPos2i( (GLint)0, (GLint)(p_height - m_text_height) );
-// 	glListBase( g_font_base );
-// 	glCallLists( strlen(l_str), GL_UNSIGNED_BYTE, (GLubyte*) l_str );
-    g_font.Printf( 0, m_text_height,
+//    g_font.Printf( 0, m_text_height,
+    m_font->Printf( 0, p_height - m_text_height,
         "Modes Draw:%s CODEC:%s RX:%s TX:%s",
         draw_mode_string( ),
         codec_mode_string( ),
@@ -825,106 +812,148 @@ void color_set( GLdouble* p_v, double p_r, double p_g, double p_b )
 	p_v[2] = p_b;
 }
 
-void spectrum_draw_abs( std::complex<double>* p_psrc, long p_npoints )
+void fftcodec::spectrum_draw_abs( std::complex<double>* p_psrc )
 {
-	std::complex<double>* l_pdata = p_psrc;
-	long n;
-	glBegin( GL_LINE_STRIP );
-	for(n=0;n<p_npoints;n++){
-		double l_x = (double)n/(p_npoints-1);
-		double l_y = std::abs(*l_pdata);
-		glVertex2d( l_x, l_y );
-		l_pdata++;
-	}
-	glEnd();
+//	std::complex<double>* l_pdata = p_psrc;
+//	long n;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		double l_y = std::abs(*l_pdata);
+//		glVertex2d( l_x, l_y );
+//		l_pdata++;
+//	}
+//	glEnd();
+    for(int i=0;i<m_nspecsize;i++){
+        m_graphy[i] = std::abs(p_psrc[i]);
+    }
+    m_specgraph->Draw(m_graphy);
 }
 
-void spectrum_draw_log( std::complex<double>* p_psrc, long p_npoints )
+void fftcodec::spectrum_draw_log( std::complex<double>* p_psrc )
 {
-	std::complex<double>* l_pdata = p_psrc;
-	long n;
-	glBegin( GL_LINE_STRIP );
-	for(n=0;n<p_npoints;n++){
-		double l_x = (double)n/(p_npoints-1);
-		double l_y = std::abs(*l_pdata);
-        
-		if( l_y < 1e-9 ) l_y=1e-9;
-		l_y = 20.0*log10(l_y);
-		glVertex2d( l_x, l_y );
-		l_pdata++;
-	}
-	glEnd();
+//	std::complex<double>* l_pdata = p_psrc;
+//	long n;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		double l_y = std::abs(*l_pdata);
+//
+//		if( l_y < 1e-9 ) l_y=1e-9;
+//		l_y = 20.0*log10(l_y);
+//		glVertex2d( l_x, l_y );
+//		l_pdata++;
+//	}
+//	glEnd();
+    for(int i=0;i<m_nspecsize;i++){
+        float y = std::abs(p_psrc[i]);
+        if(y<1e-9)y=1e-9;
+        m_graphy[i] = 20*log10(y);
+    }
+    m_specgraph->Draw(m_graphy);
 }
 
-void dspectrum_draw_abs( double* p_psrc, long p_npoints )
+void fftcodec::dspectrum_draw_abs( double* p_psrc )
 {
-	double* l_pdval = p_psrc;
-	long n;
-	glBegin( GL_LINE_STRIP );
-	for(n=0;n<p_npoints;n++){
-		double l_x = (double)n/(p_npoints-1);
-		glVertex2d( l_x, *l_pdval);
-		l_pdval++;
-	}
-	glEnd();
+//	double* l_pdval = p_psrc;
+//	long n;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		glVertex2d( l_x, *l_pdval);
+//		l_pdval++;
+//	}
+//	glEnd();
+    for(int i=0;i<m_nspecsize;i++){
+        m_graphy[i] = p_psrc[i];
+    }
+    m_specgraph->Draw(m_graphy);
 }
 
-void dspectrum_draw_log( double* p_psrc, long p_npoints )
+void fftcodec::dspectrum_draw_log( double* p_psrc )
 {
-	double* l_pdval = p_psrc;
-	long n;
-	glBegin( GL_LINE_STRIP );
-	for(n=0;n<p_npoints;n++){
-		double l_x = (double)n/(p_npoints-1);
-		double l_y = *l_pdval;
-		if( l_y < 1e-9 ) l_y=1e-9;
-		l_y = 20.0*log10(l_y);
-		glVertex2d( l_x, l_y );
-		l_pdval++;
-	}
-	glEnd();
+//	double* l_pdval = p_psrc;
+//	long n;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		double l_y = *l_pdval;
+//		if( l_y < 1e-9 ) l_y=1e-9;
+//		l_y = 20.0*log10(l_y);
+//		glVertex2d( l_x, l_y );
+//		l_pdval++;
+//	}
+//	glEnd();
+    for(int i=0;i<m_nspecsize;i++){
+        float y = p_psrc[i];
+        if(y<1e-9)y=1e-9;
+        m_graphy[i] = 20.0*log10(y);
+    }
+    m_specgraph->Draw(m_graphy);
 }
 
-void dspectrum_draw_log_bounds( double* p_psrc, double* p_prms, long p_npoints )
+void fftcodec::dspectrum_draw_log_bounds( double* p_psrc, double* p_prms )
 {
-	double* l_pdval = p_psrc;
-	double* l_prms = p_prms;
-	long n;
-	glBegin( GL_LINE_STRIP );
-	for(n=0;n<p_npoints;n++){
-		double l_x = (double)n/(p_npoints-1);
-		double l_y = *l_pdval;
-		if( l_y < 1e-9 ) l_y=1e-9;
-		l_y = 20.0*log10(l_y);
-		glVertex2d( l_x, l_y );
-		l_pdval++;
-	}
-	glEnd();
-	l_pdval = p_psrc;
-	glBegin( GL_LINE_STRIP );
-	for(n=0;n<p_npoints;n++){
-		double l_x = (double)n/(p_npoints-1);
-		double l_y = *l_pdval + *l_prms;
-		if( l_y < 1e-9 ) l_y=1e-9;
-		l_y = 20.0*log10(l_y);
-		glVertex2d( l_x, l_y );
-		l_pdval++;
-		l_prms++;
-	}
-	glEnd();
-	l_pdval = p_psrc;
-	l_prms = p_prms;
-	glBegin( GL_LINE_STRIP );
-	for(n=0;n<p_npoints;n++){
-		double l_x = (double)n/(p_npoints-1);
-		double l_y = *l_pdval - *l_prms;
-		if( l_y < 1e-9 ) l_y=1e-9;
-		l_y = 20.0*log10(l_y);
-		glVertex2d( l_x, l_y );
-		l_pdval++;
-		l_prms++;
-	}
-	glEnd();
+//	double* l_pdval = p_psrc;
+//	double* l_prms = p_prms;
+//	long n;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		double l_y = *l_pdval;
+//		if( l_y < 1e-9 ) l_y=1e-9;
+//		l_y = 20.0*log10(l_y);
+//		glVertex2d( l_x, l_y );
+//		l_pdval++;
+//	}
+//	glEnd();
+    for(int i=0;i<m_nspecsize;i++){
+        float y = p_psrc[i];
+        if(y<1e-9)y=1e-9;
+        m_graphy[i] = 20.0*log10(y);
+    }
+    m_specgraph->Draw(m_graphy);
+
+//	l_pdval = p_psrc;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		double l_y = *l_pdval + *l_prms;
+//		if( l_y < 1e-9 ) l_y=1e-9;
+//		l_y = 20.0*log10(l_y);
+//		glVertex2d( l_x, l_y );
+//		l_pdval++;
+//		l_prms++;
+//	}
+//	glEnd();
+    for(int i=0;i<m_nspecsize;i++){
+        float y = p_psrc[i] + p_prms[i];
+        if(y<1e-9)y=1e-9;
+        m_graphy[i] = 20.0*log10(y);
+    }
+    m_specgraph->Draw(m_graphy);
+//	l_pdval = p_psrc;
+//	l_prms = p_prms;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		double l_y = *l_pdval - *l_prms;
+//		if( l_y < 1e-9 ) l_y=1e-9;
+//		l_y = 20.0*log10(l_y);
+//		glVertex2d( l_x, l_y );
+//		l_pdval++;
+//		l_prms++;
+//	}
+//	glEnd();
+
+    for(int i=0;i<m_nspecsize;i++){
+        float y = p_psrc[i] - p_prms[i];
+        if(y<1e-9)y=1e-9;
+        m_graphy[i] = 20.0*log10(y);
+    }
+    m_specgraph->Draw(m_graphy);
+
+
 }
 
 

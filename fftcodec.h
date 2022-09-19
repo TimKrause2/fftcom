@@ -3,8 +3,11 @@
 #include <pthread.h>
 #include <GL/glew.h>
 #include <X11/Xlib.h>
+#include <glm/glm.hpp>
 
 #include "vsample.h"
+#include <lgraph.h>
+#include <esfont.h>
 
 #define NWINDOW 256
 #define NSUPERSAMPLE 4096
@@ -12,6 +15,34 @@
 #define NSWEEPFRAMES 5
 #define NRXSWEEPFRAMES 4
 #define NINITFRAMES 8
+
+#define HUE_TIME1 155.5
+#define SAT_TIME1 1.0
+#define VAL_TIME1 1.0
+#define HUE_TIME0 155.5
+#define SAT_TIME0 0.580
+#define VAL_TIME0 0.602
+
+#define HUE_FREQ1 0.0
+#define SAT_FREQ1 0.0
+#define VAL_FREQ1 1.0
+#define HUE_FREQ0 0.0
+#define SAT_FREQ0 0.0
+#define VAL_FREQ0 0.455
+
+#define HUE_NF1 45.7
+#define SAT_NF1 0.534
+#define VAL_NF1 1.0
+#define HUE_NF0 45.7
+#define SAT_NF0 0.534
+#define VAL_NF0 0.450
+
+#define HUE_IR1 189.4
+#define SAT_IR1 0.545
+#define VAL_IR1 1.0
+#define HUE_IR0 189.4
+#define SAT_IR0 0.545
+#define VAL_IR0 0.450
 
 typedef enum {
 	CODEC_MODE_IDLE,
@@ -67,7 +98,8 @@ typedef enum {
 
 typedef enum {
 	DRAW_SRC_RX,
-	DRAW_SRC_TX
+    DRAW_SRC_TX,
+    DRAW_SRC_IMPULSE
 } draw_src_t;
 
 #define DRAW_FLAG_NF 0x01
@@ -76,6 +108,7 @@ typedef enum {
 class fftcodec {
 public:
 	unsigned int m_nfftsize;
+    unsigned int m_nspecsize;
 	double m_fsamplerate;
 	//
 	// codec
@@ -126,26 +159,32 @@ public:
 	//
 	// renderer
 	//
-	GLuint        m_font_base;
-	XFontStruct*  m_pfont;
-	int           m_text_height;
+    FreeTypeFont* m_font;
+    LGraph*       m_timegraph;
+    LGraph*       m_specgraph;
+    int           m_text_height;
 	draw_mode_t   m_draw_mode;
 	draw_src_t    m_draw_src;
 	long          m_draw_flags;
-	GLdouble      m_fg_color[3];
-	GLdouble      m_bg_color[3];
-	GLdouble      m_rt_color[3];
-	GLdouble      m_nf_color[3];
-	GLdouble      m_ir_color[3];
 	long          m_iconstellation0;
 	long          m_iconstellation1;
 	double        m_draw_constellation_max;
 	double        m_draw_db_min;
 	double        m_draw_db_max;
 	double        m_draw_time_max;
+    float         m_draw_abs_max;
 	std::complex<double>* m_draw_data_x;
 	std::complex<double>* m_draw_data_X;
     std::complex<double>* m_draw_data_impulse;
+    float* m_graphy;
+    glm::vec4  m_timeColor1;
+    glm::vec4  m_timeColor0;
+    glm::vec4  m_freqColor1;
+    glm::vec4  m_freqColor0;
+    glm::vec4  m_nfColor1;
+    glm::vec4  m_nfColor0;
+    glm::vec4  m_irColor1;
+    glm::vec4  m_irColor0;
 
 public:
     fftcodec(int nfftsize, int fsamplerate);
@@ -166,6 +205,13 @@ private:
     const char* codec_mode_string();
     const char* rx_mode_string();
     const char* tx_mode_string();
+
+    void spectrum_draw_abs( std::complex<double>* src );
+    void spectrum_draw_log( std::complex<double>* src );
+    void dspectrum_draw_abs( double* src );
+    void dspectrum_draw_log( double* src );
+    void dspectrum_draw_log_bounds( double* p_px, double* p_prms );
+
 public:
     void draw_init( Display* p_pDisplay );
     void draw( int p_width, int p_height );
@@ -177,10 +223,4 @@ void color_set_hsv( GLdouble* p_c, double p_h, double p_s, double p_v );
 void spectrum_stats( std::complex<double>* src, double* p_pmean, double* p_prms, long p_nfftsize, long p_nframes );
 void spectrum_copy( std::complex<double>* src, std::complex<double>* dst, long p_npoints );
 void spectrum_set( std::complex<double>* dst, long p_npoints, std::complex<double> p_val );
-void spectrum_draw_abs( std::complex<double>* src, long p_npoints );
-void spectrum_draw_log( std::complex<double>* src, long p_npoints );
-void dspectrum_draw_abs( double* src, long p_npoints );
-void dspectrum_draw_log( double* src, long p_npoints );
-void dspectrum_draw_log_bounds( double* p_px, double* p_prms, long p_npoints );
-
 

@@ -81,7 +81,6 @@ void* process_thread(void* p_arg)
 
 void KeyPressEvaluate(XKeyEvent* p_event)
 {
-	//printf("KeyPressEvaluate\n");
 	KeySym l_keysym = XLookupKeysym( p_event, 0 );
 	switch(l_keysym){
     case XK_Escape:
@@ -104,6 +103,21 @@ void KeyPressEvaluate(XKeyEvent* p_event)
         break;
     case XK_F6:
         g_pfftcodec->codec_mode( CODEC_MODE_SYNC_ONLY );
+        break;
+    case XK_1:
+    case XK_KP_1:
+    case XK_KP_End:
+        g_pfftcodec->m_draw_src = DRAW_SRC_RX;
+        break;
+    case XK_2:
+    case XK_KP_2:
+    case XK_KP_Down:
+        g_pfftcodec->m_draw_src = DRAW_SRC_TX;
+        break;
+    case XK_3:
+    case XK_KP_3:
+    case XK_KP_Page_Down:
+        g_pfftcodec->m_draw_src = DRAW_SRC_IMPULSE;
         break;
     case XK_n:
     case XK_N:
@@ -129,11 +143,11 @@ void KeyPressEvaluate(XKeyEvent* p_event)
     case XK_T:
         g_pfftcodec->m_draw_mode = DRAW_MODE_TIME;
         break;
-    case XK_r:
-    case XK_R:
-        g_pfftcodec->m_draw_mode = DRAW_MODE_IMPULSE;
-    case XK_s:
-        break;
+//    case XK_r:
+//    case XK_R:
+//        g_pfftcodec->m_draw_mode = DRAW_MODE_IMPULSE;
+//    case XK_s:
+//        break;
     case XK_p:
     case XK_P:
         g_pfftcodec->m_codec_flags |= CODEC_FLAG_PRINT;
@@ -148,6 +162,10 @@ void KeyPressEvaluate(XKeyEvent* p_event)
             }
             break;
         case DRAW_MODE_FREQUENCY_ABS_LINEAR:
+            g_pfftcodec->m_draw_abs_max /= 2.0;
+            if( g_pfftcodec->m_draw_abs_max < 1/4096.0){
+                g_pfftcodec->m_draw_abs_max = 1/4096.0;
+            }
             break;
         case DRAW_MODE_FREQUENCY_ABS_LOG:
             if( !g_shiftl ){
@@ -188,6 +206,10 @@ void KeyPressEvaluate(XKeyEvent* p_event)
             }
             break;
         case DRAW_MODE_FREQUENCY_ABS_LINEAR:
+            g_pfftcodec->m_draw_abs_max *= 2.0;
+            if( g_pfftcodec->m_draw_abs_max > 1.0){
+                g_pfftcodec->m_draw_abs_max = 1.0;
+            }
             break;
         case DRAW_MODE_FREQUENCY_ABS_LOG:
             if( !g_shiftl ){

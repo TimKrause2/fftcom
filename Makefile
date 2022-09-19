@@ -5,7 +5,7 @@ LDLIBS=-ljack -lrt -lfftw3_threads -lfftw3 -lX11 -lGL -lGLU -lGLEW -lm -L esutil
 LDFLAGS=-ggdb -pthread
 
 
-fftcom:fftcom.o vsample.o fftcodec.o font.o
+fftcom:fftcom.o vsample.o fftcodec.o
 
 fftcom.o:fftcom.cc
 
