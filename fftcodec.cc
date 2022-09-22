@@ -554,6 +554,14 @@ void fftcodec::draw_init( Display* p_pDisplay )
     m_timegraph->SetLineWidths(lineWidth0, lineWidth1);
     m_specgraph = new LGraph(m_nspecsize);
     m_specgraph->SetLineWidths(lineWidth0, lineWidth1);
+    m_pgraph = new PGraph(m_nfftsize, (float)hdots*2/hmm);
+    glm::vec4 *colors = new glm::vec4[m_nfftsize];
+    for(int i=0;i<m_nfftsize;i++){
+        glm::vec3 hsv((float)i*360.0/m_nfftsize, 0.75, 1.0);
+        colors[i] = glm::vec4(glm::rgbColor(hsv),1.0);
+    }
+    m_pgraph->SetColors(colors, m_nfftsize);
+    delete [] colors;
 }
 
 const char* fftcodec::draw_mode_string(  )
@@ -659,7 +667,7 @@ void fftcodec::draw( int p_width, int p_height )
 	long n,i,N;
 	GLdouble l_color[3];
     glDrawBuffer(GL_BACK);
-    glClearColor( 0.0, 0.0, 0.0, 1.0 );
+    glClearColor( 0.2, 0.2, 0.2, 1.0 );
 	glClear( GL_COLOR_BUFFER_BIT );
 	glEnable( GL_BLEND );
 	glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
@@ -704,11 +712,6 @@ void fftcodec::draw( int p_width, int p_height )
         break;
 
     case DRAW_MODE_FREQUENCY_ABS_LOG:
-//        glMatrixMode( GL_PROJECTION );
-//        glLoadIdentity();
-//        gluOrtho2D( 0.0, 1.0, m_draw_db_min, m_draw_db_max );
-//        glMatrixMode( GL_MODELVIEW );
-//        glLoadIdentity();
         m_specgraph->SetLimits(m_draw_db_max, m_draw_db_min);
         m_specgraph->SetColors(m_freqColor0, m_freqColor1);
         spectrum_draw_log( l_psrcX );
@@ -716,7 +719,6 @@ void fftcodec::draw( int p_width, int p_height )
         if( m_codec_flags&CODEC_FLAG_NF_COMPLETE ){
             if( m_draw_flags&DRAW_FLAG_NF ){
                 // draw the noise floor
-//                glColor3d( 1.0, 0.5, 1.0 );
                 m_specgraph->SetColors(m_nfColor0, m_nfColor1);
                 dspectrum_draw_log_bounds( m_rx_nf_mean, m_rx_nf_rms );
             }
@@ -725,47 +727,51 @@ void fftcodec::draw( int p_width, int p_height )
         if( m_codec_flags&CODEC_FLAG_IR_COMPLETE ){
             if( m_draw_flags&DRAW_FLAG_IR ){
                 // draw the impulse response
-//                glColor3d( 0.5, 1.0, 1.0 );
                 m_specgraph->SetColors(m_irColor0, m_irColor1);
                 dspectrum_draw_log_bounds( m_rx_ir_mean, m_rx_ir_rms );
             }
         }
-//        g_font.Printf( 0, p_height - m_text_height,
         m_font->Printf( 0, 0,
                         "dB max:%5.1f dB min:%5.1f", m_draw_db_max,
                         m_draw_db_min );
         break;
 
     case DRAW_MODE_FREQUENCY_CONSTELLATION:
-        glEnable( GL_POINT_SMOOTH );
-        glPointSize( 3.0 );
-        glMatrixMode( GL_PROJECTION );
-        glLoadIdentity();
-        gluOrtho2D(
-            -m_draw_constellation_max*p_width/p_height,
-            m_draw_constellation_max*p_width/p_height,
-            -m_draw_constellation_max,
-            m_draw_constellation_max );
-        glMatrixMode( GL_MODELVIEW );
-        glLoadIdentity();
-        l_pval = &l_psrcX[m_iconstellation0];
-        N = m_iconstellation1 - m_iconstellation0 + 1;
-        glBegin( GL_POINTS );
-        for(n=m_iconstellation0,i=0;n<=m_iconstellation1;n++,i++){
-            double l_hue = (double)i/N;
-            color_set_hsv( l_color, l_hue, 0.75, 1.0 );
-            glColor3dv( l_color );
-            glVertex2d( std::real(*l_pval), std::imag(*l_pval) );
-            l_pval++;
+//        glEnable( GL_POINT_SMOOTH );
+//        glPointSize( 3.0 );
+//        glMatrixMode( GL_PROJECTION );
+//        glLoadIdentity();
+//        gluOrtho2D(
+//            -m_draw_constellation_max*p_width/p_height,
+//            m_draw_constellation_max*p_width/p_height,
+//            -m_draw_constellation_max,
+//            m_draw_constellation_max );
+//        glMatrixMode( GL_MODELVIEW );
+//        glLoadIdentity();
+//        l_pval = &l_psrcX[m_iconstellation0];
+//        N = m_iconstellation1 - m_iconstellation0 + 1;
+//        glBegin( GL_POINTS );
+//        for(n=m_iconstellation0,i=0;n<=m_iconstellation1;n++,i++){
+//            double l_hue = (double)i/N;
+//            color_set_hsv( l_color, l_hue, 0.75, 1.0 );
+//            glColor3dv( l_color );
+//            glVertex2d( std::real(*l_pval), std::imag(*l_pval) );
+//            l_pval++;
+//        }
+//        glEnd();
+        m_pgraph->SetDrawBounds(m_draw_constellation_max);
+        glm::vec2 *points = new glm::vec2[m_nfftsize];
+        for(int i=0;i<m_nfftsize;i++){
+            points[i] = glm::vec2( std::real(l_psrcX[i]), std::imag(l_psrcX[i]));
         }
-        glEnd();
-//        g_font.Printf( 0, p_height - m_text_height, "Scale:%8.6f MRA:%+8.6f",
-//                                    m_draw_constellation_max,
-//                           m_rx_Xargmean );
+        m_pgraph->Draw(points, m_nfftsize);
+        delete [] points;
+        m_font->Printf( 0, 0, "Scale:%8.6f MRA:%+8.6f",
+                        m_draw_constellation_max,
+                        m_rx_Xargmean );
         break;
 	}
 	// draw the title information
-//    g_font.Printf( 0, m_text_height,
     m_font->Printf( 0, p_height - m_text_height,
         "Modes Draw:%s CODEC:%s RX:%s TX:%s",
         draw_mode_string( ),

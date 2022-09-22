@@ -8,6 +8,7 @@
 #include "vsample.h"
 #include <lgraph.h>
 #include <esfont.h>
+#include <pgraph.h>
 
 #define NWINDOW 256
 #define NSUPERSAMPLE 4096
@@ -162,6 +163,7 @@ public:
     FreeTypeFont* m_font;
     LGraph*       m_timegraph;
     LGraph*       m_specgraph;
+    PGraph*       m_pgraph;
     int           m_text_height;
 	draw_mode_t   m_draw_mode;
 	draw_src_t    m_draw_src;

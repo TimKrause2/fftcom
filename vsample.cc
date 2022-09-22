@@ -10,6 +10,12 @@ double sinc(double p_x)
 		return sin(p_x)/p_x;
 }
 
+double HammingWindow(int n, int N){
+    double a0 = 25.0/46.0;
+    double a1 = 1.0 - a0;
+    return a0 + a1*cos(2.0*M_PI*(double)n/N);
+}
+
 vsample::vsample( int p_nwindow, int p_nss, int p_fsamplerate )
 {
 	if(p_nwindow&1)p_nwindow++;
@@ -31,8 +37,8 @@ vsample::vsample( int p_nwindow, int p_nss, int p_fsamplerate )
 	for(i=0;i<p_nss;i++){
 		double l_deltat = (double)i/p_nss;
 		for(s=0;s<p_nwindow;s++){
-			double l_n = s-(p_nwindow/2-1);
-			*l_pdata = sinc( (l_n-l_deltat)*M_PI );
+            int l_n = s-(p_nwindow/2-1);
+            *l_pdata = sinc( ((double)l_n-l_deltat)*M_PI )*HammingWindow(l_n,p_nwindow);
 			l_pdata++;
 		}
 	}
