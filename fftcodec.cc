@@ -116,6 +116,8 @@ fftcodec::fftcodec( int p_nfftsize, int p_fsamplerate )
     m_irColor0 = glm::vec4(
                 glm::rgbColor(glm::vec3(HUE_IR0,SAT_IR0,VAL_IR0)),
                 1.0);
+    m_cursor_in_window = false;
+
 
 }
 
@@ -734,6 +736,12 @@ void fftcodec::draw( int p_width, int p_height )
         m_font->Printf( 0, 0,
                         "dB max:%5.1f dB min:%5.1f", m_draw_db_max,
                         m_draw_db_min );
+        if(m_cursor_in_window){
+            float f = m_cursor_pos.x/(p_width-1)*m_fsamplerate/2.0;
+            float dB = m_cursor_pos.y/(p_height-1)*(m_draw_db_min-m_draw_db_max)+m_draw_db_max;
+            m_font->Printf( 0, m_text_height,
+                            "Cursor F:% 7.2f Hz  magnitude:% 5.1f dB", f, dB );
+        }
         break;
 
     case DRAW_MODE_FREQUENCY_CONSTELLATION:

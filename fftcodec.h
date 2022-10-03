@@ -187,6 +187,8 @@ public:
     glm::vec4  m_nfColor0;
     glm::vec4  m_irColor1;
     glm::vec4  m_irColor0;
+    bool m_cursor_in_window;
+    glm::vec2  m_cursor_pos;
 
 public:
     fftcodec(int nfftsize, int fsamplerate);

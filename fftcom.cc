@@ -379,7 +379,12 @@ void glWindowCreate( int argc, char** argv )
 		l_mask, &l_attr );
 	
 	XSelectInput( g_pDisplay, g_window,
-							 KeyPressMask | KeyReleaseMask | StructureNotifyMask );
+                  KeyPressMask |
+                  KeyReleaseMask |
+                  StructureNotifyMask |
+                  EnterWindowMask |
+                  LeaveWindowMask |
+                  PointerMotionMask );
 	g_context = glXCreateContext( g_pDisplay, g_visinfo, NULL, True );
 	if(!g_context){
 		printf("Could not create the GL context.\n");
@@ -424,8 +429,8 @@ void glWindowCreate( int argc, char** argv )
 	printf("icon size: %dx%d\n",l_icon_width,l_icon_height);
 
 	Pixmap l_icon_pixmap = XCreatePixmap( g_pDisplay, g_window,
-																				l_icon_width, l_icon_height,
-																			 DefaultDepthOfScreen(l_screen) );
+                                        l_icon_width, l_icon_height,
+                                        DefaultDepthOfScreen(l_screen) );
 	XGCValues l_gcvalues;
 	l_gcvalues.foreground = 0x0000FF00;
 	l_gcvalues.background = 0x00000000;
@@ -491,7 +496,7 @@ void glWindowCreate( int argc, char** argv )
 	l_class_hint->res_name = (char*)"fftcom";
 	l_class_hint->res_class = (char*)"fftcom";
 	XSetWMProperties( g_pDisplay, g_window, &l_tp_window_name, &l_tp_icon_name,
-										argv, argc, l_size_hints, l_wm_hints, l_class_hint );
+                      argv, argc, l_size_hints, l_wm_hints, l_class_hint );
 	
 
 	XMapWindow( g_pDisplay, g_window );
@@ -608,22 +613,34 @@ int main(int p_narg, char** p_argv)
 			XEvent l_event;
 			XNextEvent(g_pDisplay,&l_event);
 			switch(l_event.type){
-				case KeyPress:
-					KeyPressEvaluate((XKeyEvent*)&l_event);
-					break;
-				case KeyRelease:
-					KeyReleaseEvaluate((XKeyEvent*)&l_event);
-					break;
-				case ConfigureNotify:
-					ConfigureEvaluate((XConfigureEvent*)&l_event);
-					break;
-				case ClientMessage:
-					if( l_event.xclient.data.l[0] == g_wmDeleteMessage ){
-						g_process = 0;
-					}
-					break;
-				default:
-					break;
+            case KeyPress:
+                KeyPressEvaluate((XKeyEvent*)&l_event);
+                break;
+            case KeyRelease:
+                KeyReleaseEvaluate((XKeyEvent*)&l_event);
+                break;
+            case ConfigureNotify:
+                ConfigureEvaluate((XConfigureEvent*)&l_event);
+                break;
+            case EnterNotify:
+                g_pfftcodec->m_cursor_in_window = true;
+                g_pfftcodec->m_cursor_pos = glm::vec2(
+                            l_event.xcrossing.x, l_event.xcrossing.y);
+                break;
+            case LeaveNotify:
+                g_pfftcodec->m_cursor_in_window = false;
+                break;
+            case MotionNotify:
+                g_pfftcodec->m_cursor_pos = glm::vec2(
+                            l_event.xmotion.x, l_event.xmotion.y);
+                break;
+            case ClientMessage:
+                if( l_event.xclient.data.l[0] == g_wmDeleteMessage ){
+                    g_process = 0;
+                }
+                break;
+            default:
+                break;
 			}
 		}
 		if(!g_process)
