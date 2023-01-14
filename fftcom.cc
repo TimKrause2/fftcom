@@ -512,20 +512,6 @@ void glWindowDestroy( void )
 	XDestroyWindow( g_pDisplay, g_window );
 }
 
-void print_sl_versions(void)
-{
-    printf("glGetString(GL_SHADING_LANGUAGE_VERSION​):%s\n",
-           glGetString(GL_SHADING_LANGUAGE_VERSION));
-
-    GLint Nshaderv;
-
-    glGetIntegerv(GL_NUM_SHADING_LANGUAGE_VERSIONS, &Nshaderv);
-    for(int k=0;k<Nshaderv;k++){
-        printf("Shader Language Version(%d):%s\n",
-               k, glGetStringi(GL_SHADING_LANGUAGE_VERSION,k));
-    }
-}
-
 int main(int p_narg, char** p_argv)
 {
 	jack_status_t  l_status;
@@ -554,9 +540,6 @@ int main(int p_narg, char** p_argv)
         printf("glewInit Error:%s\n", glewGetErrorString(err));
         return 1;
     }
-
-    print_sl_versions();
-
 
 	// become a jack client
 	g_pclient = jack_client_open(
