@@ -87,10 +87,11 @@ fftcodec::fftcodec( int p_nfftsize, int p_fsamplerate )
     m_draw_db_max =  5.0;
     m_draw_time_max = 1.0;
     m_draw_abs_max = 1.0;
+    m_window_half = 5;
     m_draw_data_x = (std::complex<double>*)fftw_malloc( sizeof(std::complex<double>) * p_nfftsize );
     m_draw_data_X = (std::complex<double>*)fftw_malloc( sizeof(std::complex<double>) * p_nfftsize );
-    m_draw_data_impulse = (std::complex<double>*)fftw_malloc( sizeof(std::complex<double>) * p_nfftsize );
     m_graphy = new float[p_nfftsize];
+    m_graphy_smooth = new float[m_nspecsize];
 
     m_timeColor1 = glm::vec4(
                 glm::rgbColor(glm::vec3(HUE_TIME1,SAT_TIME1,VAL_TIME1)),
@@ -571,12 +572,12 @@ const char* fftcodec::draw_mode_string(  )
     switch( m_draw_mode ){
     case DRAW_MODE_TIME:
         return "time";
-    case DRAW_MODE_IMPULSE:
-        return "impulse";
     case DRAW_MODE_FREQUENCY_ABS_LINEAR:
         return "frequency(linear)";
     case DRAW_MODE_FREQUENCY_ABS_LOG:
         return "frequency(log)";
+    case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+        return "frequency(log) smoothing";
     case DRAW_MODE_FREQUENCY_CONSTELLATION:
         return "constellation";
 	}
@@ -685,9 +686,6 @@ void fftcodec::draw( int p_width, int p_height )
         m_font->Printf(0,0,"Scale:%f",m_draw_time_max);
         break;
 
-    case DRAW_MODE_IMPULSE:
-        break;
-
     case DRAW_MODE_FREQUENCY_ABS_LINEAR:
         m_specgraph->SetLimits(m_draw_abs_max, 0.0);
         m_specgraph->SetColors(m_freqColor0, m_freqColor1);
@@ -736,6 +734,37 @@ void fftcodec::draw( int p_width, int p_height )
         m_font->Printf( 0, 0,
                         "dB max:%5.1f dB min:%5.1f", m_draw_db_max,
                         m_draw_db_min );
+        if(m_cursor_in_window){
+            float f = m_cursor_pos.x/(p_width-1)*m_fsamplerate/2.0;
+            float dB = m_cursor_pos.y/(p_height-1)*(m_draw_db_min-m_draw_db_max)+m_draw_db_max;
+            m_font->Printf( 0, m_text_height,
+                            "Cursor F:% 7.2f Hz  magnitude:% 5.1f dB", f, dB );
+        }
+        break;
+
+    case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+        m_specgraph->SetLimits(m_draw_db_max, m_draw_db_min);
+        m_specgraph->SetColors(m_freqColor0, m_freqColor1);
+        spectrum_draw_log_smooth( l_psrcX );
+        // draw the noise floor
+        if( m_codec_flags&CODEC_FLAG_NF_COMPLETE ){
+            if( m_draw_flags&DRAW_FLAG_NF ){
+                // draw the noise floor
+                m_specgraph->SetColors(m_nfColor0, m_nfColor1);
+                dspectrum_draw_log_bounds( m_rx_nf_mean, m_rx_nf_rms );
+            }
+        }
+        // draw the impulse response
+        if( m_codec_flags&CODEC_FLAG_IR_COMPLETE ){
+            if( m_draw_flags&DRAW_FLAG_IR ){
+                // draw the impulse response
+                m_specgraph->SetColors(m_irColor0, m_irColor1);
+                dspectrum_draw_log_bounds( m_rx_ir_mean, m_rx_ir_rms );
+            }
+        }
+        m_font->Printf( 0, 0,
+                        "dB max:%5.1f dB min:%5.1f window:%d", m_draw_db_max,
+                        m_draw_db_min, 1+m_window_half*2 );
         if(m_cursor_in_window){
             float f = m_cursor_pos.x/(p_width-1)*m_fsamplerate/2.0;
             float dB = m_cursor_pos.y/(p_height-1)*(m_draw_db_min-m_draw_db_max)+m_draw_db_max;
@@ -865,6 +894,46 @@ void fftcodec::spectrum_draw_log( std::complex<double>* p_psrc )
         m_graphy[i] = 20*log10(y);
     }
     m_specgraph->Draw(m_graphy);
+}
+
+void fftcodec::spectrum_draw_log_smooth(std::complex<double>* p_psrc)
+{
+//	std::complex<double>* l_pdata = p_psrc;
+//	long n;
+//	glBegin( GL_LINE_STRIP );
+//	for(n=0;n<p_npoints;n++){
+//		double l_x = (double)n/(p_npoints-1);
+//		double l_y = std::abs(*l_pdata);
+//
+//		if( l_y < 1e-9 ) l_y=1e-9;
+//		l_y = 20.0*log10(l_y);
+//		glVertex2d( l_x, l_y );
+//		l_pdata++;
+//	}
+//	glEnd();
+    for(int i=0;i<m_nspecsize;i++){
+        float y = std::abs(p_psrc[i]);
+        if(y<1e-9)y=1e-9;
+        m_graphy[i] = 20*log10(y);
+    }
+    if(m_window_half==0){
+        m_specgraph->Draw(m_graphy);
+    }else{
+        for(int i=0;i<m_nspecsize;i++){
+            int im = i-m_window_half;
+            if(im<0)im=0;
+            int ip = i+m_window_half;
+            if(ip>=m_nspecsize)ip=m_nspecsize-1;
+            int w = ip-im+1;
+            float y_smooth = 0.0;
+            for(int j=im;j<=ip;j++){
+                y_smooth += m_graphy[j];
+            }
+            y_smooth/=w;
+            m_graphy_smooth[i] = y_smooth;
+        }
+        m_specgraph->Draw(m_graphy_smooth);
+    }
 }
 
 void fftcodec::dspectrum_draw_abs( double* p_psrc )

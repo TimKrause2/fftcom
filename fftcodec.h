@@ -91,9 +91,9 @@ typedef enum {
 
 typedef enum {
 	DRAW_MODE_TIME,
-    DRAW_MODE_IMPULSE,
 	DRAW_MODE_FREQUENCY_ABS_LINEAR,
 	DRAW_MODE_FREQUENCY_ABS_LOG,
+    DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH,
 	DRAW_MODE_FREQUENCY_CONSTELLATION,
 } draw_mode_t;
 
@@ -175,10 +175,11 @@ public:
 	double        m_draw_db_max;
 	double        m_draw_time_max;
     float         m_draw_abs_max;
+    int           m_window_half;
 	std::complex<double>* m_draw_data_x;
 	std::complex<double>* m_draw_data_X;
-    std::complex<double>* m_draw_data_impulse;
     float* m_graphy;
+    float* m_graphy_smooth;
     glm::vec4  m_timeColor1;
     glm::vec4  m_timeColor0;
     glm::vec4  m_freqColor1;
@@ -212,6 +213,7 @@ private:
 
     void spectrum_draw_abs( std::complex<double>* src );
     void spectrum_draw_log( std::complex<double>* src );
+    void spectrum_draw_log_smooth( std::complex<double>* src );
     void dspectrum_draw_abs( double* src );
     void dspectrum_draw_log( double* src );
     void dspectrum_draw_log_bounds( double* p_px, double* p_prms );

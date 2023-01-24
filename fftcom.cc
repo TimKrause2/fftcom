@@ -135,6 +135,10 @@ void KeyPressEvaluate(XKeyEvent* p_event)
     case XK_L:
         g_pfftcodec->m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LOG;
         break;
+    case XK_s:
+    case XK_S:
+        g_pfftcodec->m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH;
+        break;
     case XK_c:
     case XK_C:
         g_pfftcodec->m_draw_mode = DRAW_MODE_FREQUENCY_CONSTELLATION;
@@ -154,7 +158,6 @@ void KeyPressEvaluate(XKeyEvent* p_event)
         break;
     case XK_Up:
         switch( g_pfftcodec->m_draw_mode ){
-        case DRAW_MODE_IMPULSE:
         case DRAW_MODE_TIME:
             g_pfftcodec->m_draw_time_max /= 2.0;
             if( g_pfftcodec->m_draw_time_max < 1.0/65536.0){
@@ -168,6 +171,7 @@ void KeyPressEvaluate(XKeyEvent* p_event)
             }
             break;
         case DRAW_MODE_FREQUENCY_ABS_LOG:
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
             if( !g_shiftl ){
                 // shift the spectrum up by moving the limits down
                 double l_db_range = g_pfftcodec->m_draw_db_max - g_pfftcodec->m_draw_db_min;
@@ -198,7 +202,6 @@ void KeyPressEvaluate(XKeyEvent* p_event)
         break;
     case XK_Down:
         switch( g_pfftcodec->m_draw_mode ){
-        case DRAW_MODE_IMPULSE:
         case DRAW_MODE_TIME:
             g_pfftcodec->m_draw_time_max *= 2.0;
             if( g_pfftcodec->m_draw_time_max > 1024.0 ){
@@ -212,6 +215,7 @@ void KeyPressEvaluate(XKeyEvent* p_event)
             }
             break;
         case DRAW_MODE_FREQUENCY_ABS_LOG:
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
             if( !g_shiftl ){
                 // shift the spectrum down by moving the limits up
                 double l_db_range = g_pfftcodec->m_draw_db_max - g_pfftcodec->m_draw_db_min;
@@ -238,17 +242,39 @@ void KeyPressEvaluate(XKeyEvent* p_event)
         }
         break;
     case XK_Left:
-        if( !g_shiftl ){
-            g_pfftcodec->m_pvsample->m_fv -= g_pfftcodec->m_pvsample->m_fs/1024/g_pfftcodec->m_nfftsize;
-        }else{
-            g_pfftcodec->m_pvsample->m_fv -= g_pfftcodec->m_pvsample->m_fs/g_pfftcodec->m_nfftsize;
+        switch( g_pfftcodec->m_draw_mode ){
+        case DRAW_MODE_TIME:
+        case DRAW_MODE_FREQUENCY_CONSTELLATION:
+            if( !g_shiftl ){
+                g_pfftcodec->m_pvsample->m_fv -= g_pfftcodec->m_pvsample->m_fs/1024/g_pfftcodec->m_nfftsize;
+            }else{
+                g_pfftcodec->m_pvsample->m_fv -= g_pfftcodec->m_pvsample->m_fs/g_pfftcodec->m_nfftsize;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+            if(--g_pfftcodec->m_window_half<0)
+                g_pfftcodec->m_window_half=0;
+            break;
+        default:
+            break;
         }
         break;
     case XK_Right:
-        if( !g_shiftl ){
-            g_pfftcodec->m_pvsample->m_fv += g_pfftcodec->m_pvsample->m_fs/1024/g_pfftcodec->m_nfftsize;
-        }else{
-            g_pfftcodec->m_pvsample->m_fv += g_pfftcodec->m_pvsample->m_fs/g_pfftcodec->m_nfftsize;
+        switch( g_pfftcodec->m_draw_mode ){
+        case DRAW_MODE_TIME:
+        case DRAW_MODE_FREQUENCY_CONSTELLATION:
+            if( !g_shiftl ){
+                g_pfftcodec->m_pvsample->m_fv += g_pfftcodec->m_pvsample->m_fs/1024/g_pfftcodec->m_nfftsize;
+            }else{
+                g_pfftcodec->m_pvsample->m_fv += g_pfftcodec->m_pvsample->m_fs/g_pfftcodec->m_nfftsize;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+            if(++g_pfftcodec->m_window_half>25)
+                g_pfftcodec->m_window_half=25;
+            break;
+        default:
+            break;
         }
         break;
     case XK_space:
