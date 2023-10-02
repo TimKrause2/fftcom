@@ -1,9 +1,10 @@
 CC=g++
-CFLAGS=-pthread -ggdb
-CPPFLAGS=-ggdb -O2 `pkg-config --cflags freetype2` -I esutil -pthread -fPIC
-LDLIBS=-ljack -lrt -lfftw3_threads -lfftw3 -lX11 -lGL -lGLU -lGLEW -lm -L esutil -lutil `pkg-config --libs freetype2`
-LDFLAGS=-ggdb -pthread
+CFLAGS=-ggdb -pthread
+CPPFLAGS=-O2 -pthread `pkg-config --cflags freetype2` `pkg-config --cflags libpipewire-0.3` -I esutil `sdl2-config --cflags`
+LDLIBS=-ljack -lrt -lfftw3_threads -lfftw3 -lX11 -lGL -lGLEW -lm -L esutil -lutil `pkg-config --libs freetype2` `pkg-config --libs libpipewire-0.3`
+LDFLAGS=-O2 -pthread
 
+all:fftcom pwfftcom
 
 fftcom:fftcom.o vsample.o fftcodec.o
 
@@ -13,7 +14,10 @@ vsample.o:vsample.cc vsample.h
 
 fftcodec.o:fftcodec.cc fftcodec.h vsample.h
 
-font.o:font.cc
+cbuff.o:cbuff.cpp cbuff.h
 
-ptest:ptest.cc
+pwfftcom:pwfftcom.o vsample.o fftcodec.o cbuff.o
+
+pwfftcom.o:pwfftcom.cc
+
 

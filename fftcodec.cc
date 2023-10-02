@@ -402,136 +402,136 @@ void fftcodec::init_tx_mode( tx_mode_t p_txmode )
 void fftcodec::update_codec_mode(  )
 {
     switch( m_codec_mode ){
-		case CODEC_MODE_IDLE:
-            init_codec_mode();
-			break;
-		case CODEC_MODE_IMPULSE_TEST:
-            init_codec_mode( );
-			break;
-		case CODEC_MODE_SWEEP_TEST:
-            if( m_itxframe == NSWEEPFRAMES ){
-                if( m_itxsweep == m_nfftsize/2 ){
-                    printf("Sweep test complete. Saving results.\n");
-                    fftw_execute( m_rx_impulse_plan );
-                    init_tx_mode( TX_MODE_SILENCE );
-                    init_rx_mode( RX_MODE_IDLE );
-                    m_codec_mode = CODEC_MODE_IDLE;
-                    m_itxsweep = 0;
-                    FILE* rfile = fopen("response.txt","w");
-                    if(rfile){
-                        fprintf(rfile, "FFT size:%d Sample rate:%lf\n",
-                                m_nfftsize,
-                                m_fsamplerate);
-                        std::complex<double> *l_pI = m_rx_Impulse;
-                        for(int i=0;i<=m_nfftsize/2;i++){
-                            fprintf(rfile, "%20.19lg, %20.19lg\n",
-                                    std::real(*l_pI),std::imag(*l_pI));
-                            l_pI++;
-                        }
-                        fclose(rfile);
-                    }
-                    // compute the geometric mean of the impulse spectrum
-                    double gm=0;
-                    for(int i=1;i<=m_nfftsize/2;i++){
-                        gm += log(abs(m_rx_Impulse[i]));
-                    }
-                    gm /= m_nfftsize/2;
-                    gm = exp(gm);
-                    // scale the impulse spectrum by the geometric mean
+    case CODEC_MODE_IDLE:
+        init_codec_mode();
+        break;
+    case CODEC_MODE_IMPULSE_TEST:
+        init_codec_mode( );
+        break;
+    case CODEC_MODE_SWEEP_TEST:
+        if( m_itxframe == NSWEEPFRAMES ){
+            if( m_itxsweep == m_nfftsize/2 ){
+                printf("Sweep test complete. Saving results.\n");
+                fftw_execute( m_rx_impulse_plan );
+                init_tx_mode( TX_MODE_SILENCE );
+                init_rx_mode( RX_MODE_IDLE );
+                m_codec_mode = CODEC_MODE_IDLE;
+                m_itxsweep = 0;
+                FILE* rfile = fopen("response.txt","w");
+                if(rfile){
+                    fprintf(rfile, "FFT size:%d Sample rate:%lf\n",
+                            m_nfftsize,
+                            m_fsamplerate);
+                    std::complex<double> *l_pI = m_rx_Impulse;
                     for(int i=0;i<=m_nfftsize/2;i++){
-                        m_rx_Sinv[i] = std::complex<double>( abs(m_rx_Impulse[i])/gm, 0.0 );
+                        fprintf(rfile, "%20.19lg, %20.19lg\n",
+                                std::real(*l_pI),std::imag(*l_pI));
+                        l_pI++;
                     }
-                    // compute the inverse and cull certain frequencies;
-                    for(int i=0;i<=m_nfftsize/2;i++){
-                        if(i==0 || i==m_nfftsize/2){
+                    fclose(rfile);
+                }
+                // compute the geometric mean of the impulse spectrum
+                double gm=0;
+                for(int i=1;i<=m_nfftsize/2;i++){
+                    gm += log(abs(m_rx_Impulse[i]));
+                }
+                gm /= m_nfftsize/2;
+                gm = exp(gm);
+                // scale the impulse spectrum by the geometric mean
+                for(int i=0;i<=m_nfftsize/2;i++){
+                    m_rx_Sinv[i] = std::complex<double>( abs(m_rx_Impulse[i])/gm, 0.0 );
+                }
+                // compute the inverse and cull certain frequencies;
+                for(int i=0;i<=m_nfftsize/2;i++){
+                    if(i==0 || i==m_nfftsize/2){
+                        m_rx_Sinv[i] = std::complex<double>(1.0, 0.0);
+                    }else{
+                        double a = abs(m_rx_Sinv[i]);
+                        if(a<0.1){
                             m_rx_Sinv[i] = std::complex<double>(1.0, 0.0);
                         }else{
-                            double a = abs(m_rx_Sinv[i]);
-                            if(a<0.1){
-                                m_rx_Sinv[i] = std::complex<double>(1.0, 0.0);
-                            }else{
-                                m_rx_Sinv[i] = std::complex<double>(1.0/a, 0.0);
-                            }
+                            m_rx_Sinv[i] = std::complex<double>(1.0/a, 0.0);
                         }
                     }
-                    // write out the single inverse spectrum
-                    FILE* ifile = fopen("Sinv.txt","w");
-                    if(ifile){
-                        fprintf(ifile, "FFTsize:%d\n",
-                                m_nfftsize);
-                        std::complex<double> *l_pI = m_rx_Sinv;
-                        for(int i=0;i<=m_nfftsize/2;i++){
-                            fprintf(ifile, "%20.19lg, %20.19lg\n",
-                                    std::real(*l_pI),std::imag(*l_pI));
-                            l_pI++;
-                        }
-                        fclose(ifile);
-                    }
-
-                    // shift in the time domain half way into the buffer
+                }
+                // write out the single inverse spectrum
+                FILE* ifile = fopen("Sinv.txt","w");
+                if(ifile){
+                    fprintf(ifile, "FFTsize:%d\n",
+                            m_nfftsize);
+                    std::complex<double> *l_pI = m_rx_Sinv;
                     for(int i=0;i<=m_nfftsize/2;i++){
-                        std::complex<double> k = exp( std::complex<double>(0.0, (double)i*2.0*M_PI*0.5) );
-                        m_rx_Sinv[i] *= k;
+                        fprintf(ifile, "%20.19lg, %20.19lg\n",
+                                std::real(*l_pI),std::imag(*l_pI));
+                        l_pI++;
                     }
-                    // convert to the time domain
-                    fftw_execute( m_rx_sinv_plan );
-                    // convert back to the double size frequency domain
-                    fftw_execute( m_rx_Sinvd_plan );
-                    // write out the double inverse spectrum
-                    ifile = fopen("Sinvd.txt","w");
-                    if(ifile){
-                        fprintf(ifile, "FFTsize:%d\n",
-                                m_nfftsize);
-                        std::complex<double> *l_pI = m_rx_Sinvd;
-                        for(int i=0;i<=m_nfftsize;i++){
-                            *l_pI /= m_nfftsize * 2;
-                            fprintf(ifile, "%20.19lg, %20.19lg\n",
-                                    std::real(*l_pI),std::imag(*l_pI));
-                            l_pI++;
-                        }
-                        fclose(ifile);
+                    fclose(ifile);
+                }
+
+                // shift in the time domain half way into the buffer
+                for(int i=0;i<=m_nfftsize/2;i++){
+                    std::complex<double> k = exp( std::complex<double>(0.0, (double)i*2.0*M_PI*0.5) );
+                    m_rx_Sinv[i] *= k;
+                }
+                // convert to the time domain
+                fftw_execute( m_rx_sinv_plan );
+                // convert back to the double size frequency domain
+                fftw_execute( m_rx_Sinvd_plan );
+                // write out the double inverse spectrum
+                ifile = fopen("Sinvd.txt","w");
+                if(ifile){
+                    fprintf(ifile, "FFTsize:%d\n",
+                            m_nfftsize);
+                    std::complex<double> *l_pI = m_rx_Sinvd;
+                    for(int i=0;i<=m_nfftsize;i++){
+                        *l_pI /= m_nfftsize * 2;
+                        fprintf(ifile, "%20.19lg, %20.19lg\n",
+                                std::real(*l_pI),std::imag(*l_pI));
+                        l_pI++;
                     }
-				}else{
-                    init_tx_mode( TX_MODE_COSINE );
-                    m_itxsweep++;
-				}
-			}
-            init_codec_mode();
-			break;
-		case CODEC_MODE_NOISE_FLOOR_INIT:
-            if( m_itxframe == NINITFRAMES ){
-                init_rx_mode( RX_MODE_NOISE_FLOOR );
-                m_codec_mode = CODEC_MODE_NOISE_FLOOR;
-			}
-			break;
-		case CODEC_MODE_NOISE_FLOOR:
-            if( m_rx_mode == RX_MODE_IDLE ){
-                m_codec_flags |= CODEC_FLAG_NF_COMPLETE;
-                init_codec_mode( );
-			}
-			break;
-		case CODEC_MODE_IMPULSE_RESPONSE_INIT:
-            if( m_itxframe == NINITFRAMES ){
-                init_rx_mode( RX_MODE_IMPULSE_RESPONSE );
-                m_codec_mode = CODEC_MODE_IMPULSE_RESPONSE;
-			}
-			break;
-		case CODEC_MODE_IMPULSE_RESPONSE:
-            if( m_rx_mode == RX_MODE_IDLE ){
-                m_codec_flags |= CODEC_FLAG_IR_COMPLETE;
-                init_codec_mode( );
-			}
-			break;
-		case CODEC_MODE_SYNC_ONLY_INIT:
-            if( m_itxframe == NINITFRAMES ){
-                init_rx_mode( RX_MODE_SYNC_ONLY );
-                m_codec_mode = CODEC_MODE_SYNC_ONLY;
-			}
-			break;
-		case CODEC_MODE_SYNC_ONLY:
+                    fclose(ifile);
+                }
+            }else{
+                init_tx_mode( TX_MODE_COSINE );
+                m_itxsweep++;
+            }
+        }
+        init_codec_mode();
+        break;
+    case CODEC_MODE_NOISE_FLOOR_INIT:
+        if( m_itxframe == NINITFRAMES ){
+            init_rx_mode( RX_MODE_NOISE_FLOOR );
+            m_codec_mode = CODEC_MODE_NOISE_FLOOR;
+        }
+        break;
+    case CODEC_MODE_NOISE_FLOOR:
+        if( m_rx_mode == RX_MODE_IDLE ){
+            m_codec_flags |= CODEC_FLAG_NF_COMPLETE;
             init_codec_mode( );
-			break;
-	}
+        }
+        break;
+    case CODEC_MODE_IMPULSE_RESPONSE_INIT:
+        if( m_itxframe == NINITFRAMES ){
+            init_rx_mode( RX_MODE_IMPULSE_RESPONSE );
+            m_codec_mode = CODEC_MODE_IMPULSE_RESPONSE;
+        }
+        break;
+    case CODEC_MODE_IMPULSE_RESPONSE:
+        if( m_rx_mode == RX_MODE_IDLE ){
+            m_codec_flags |= CODEC_FLAG_IR_COMPLETE;
+            init_codec_mode( );
+        }
+        break;
+    case CODEC_MODE_SYNC_ONLY_INIT:
+        if( m_itxframe == NINITFRAMES ){
+            init_rx_mode( RX_MODE_SYNC_ONLY );
+            m_codec_mode = CODEC_MODE_SYNC_ONLY;
+        }
+        break;
+    case CODEC_MODE_SYNC_ONLY:
+        init_codec_mode( );
+        break;
+    }
 }
 
 void fftcodec::draw_init( Display* p_pDisplay )
@@ -539,8 +539,10 @@ void fftcodec::draw_init( Display* p_pDisplay )
 //    g_font.LoadOutline("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", 12, Pixel32(0,0,0), Pixel32(128,128,128), 1.5);
     int hdots = DisplayHeight(p_pDisplay, 0);
     int hmm = DisplayHeightMM(p_pDisplay, 0);
-
-    m_text_height = hdots*5/hmm;
+    int wdots = DisplayWidth(p_pDisplay, 0);
+    int wmm = DisplayWidthMM(p_pDisplay, 0);
+    float dpmm = (float)wdots/wmm;
+    m_text_height = (int)((float)hdots/hmm*7.5 + 0.5);
 
     float lineWidth1 = ceil((float)hdots/hmm*0.25);
     float lineWidth0 = lineWidth1*3.0;
@@ -557,6 +559,9 @@ void fftcodec::draw_init( Display* p_pDisplay )
     m_timegraph->SetLineWidths(lineWidth0, lineWidth1);
     m_specgraph = new LGraph(m_nspecsize);
     m_specgraph->SetLineWidths(lineWidth0, lineWidth1);
+    m_logspecgraph = new LGraph(m_nspecsize);
+    m_logspecgraph->SetLineWidths(lineWidth0, lineWidth1);
+    log_spec_set_x();
     m_pgraph = new PGraph(m_nfftsize, (float)hdots*2/hmm);
     glm::vec4 *colors = new glm::vec4[m_nfftsize];
     for(int i=0;i<m_nfftsize;i++){
@@ -576,6 +581,8 @@ const char* fftcodec::draw_mode_string(  )
         return "frequency(linear)";
     case DRAW_MODE_FREQUENCY_ABS_LOG:
         return "frequency(log)";
+    case DRAW_MODE_FREQUENCY_ABS_LOG_LOG:
+        return "frequency(log-log)";
     case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
         return "frequency(log) smoothing";
     case DRAW_MODE_FREQUENCY_CONSTELLATION:
@@ -670,7 +677,7 @@ void fftcodec::draw( int p_width, int p_height )
 	long n,i,N;
 	GLdouble l_color[3];
     glDrawBuffer(GL_BACK);
-    glClearColor( 0.2, 0.2, 0.2, 1.0 );
+    glClearColor( 0.4, 0.4, 0.4, 1.0 );
 	glClear( GL_COLOR_BUFFER_BIT );
 	glEnable( GL_BLEND );
 	glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
@@ -736,6 +743,22 @@ void fftcodec::draw( int p_width, int p_height )
                         m_draw_db_min );
         if(m_cursor_in_window){
             float f = m_cursor_pos.x/(p_width-1)*m_fsamplerate/2.0;
+            float dB = m_cursor_pos.y/(p_height-1)*(m_draw_db_min-m_draw_db_max)+m_draw_db_max;
+            m_font->Printf( 0, m_text_height,
+                            "Cursor F:% 7.2f Hz  magnitude:% 5.1f dB", f, dB );
+        }
+        break;
+
+    case DRAW_MODE_FREQUENCY_ABS_LOG_LOG:
+        m_logspecgraph->SetLimits(m_draw_db_max, m_draw_db_min);
+        m_logspecgraph->SetColors(m_freqColor0, m_freqColor1);
+        spectrum_draw_log_log( l_psrcX );
+        m_font->Printf( 0, 0,
+                        "dB max:%5.1f dB min:%5.1f", m_draw_db_max,
+                        m_draw_db_min );
+        if(m_cursor_in_window){
+            float alpha_display = m_cursor_pos.x/(p_width-1);
+            float f = log_spec_frequency(alpha_display);
             float dB = m_cursor_pos.y/(p_height-1)*(m_draw_db_min-m_draw_db_max)+m_draw_db_max;
             m_font->Printf( 0, m_text_height,
                             "Cursor F:% 7.2f Hz  magnitude:% 5.1f dB", f, dB );
@@ -817,6 +840,259 @@ void fftcodec::draw( int p_width, int p_height )
         tx_mode_string( ) );
 }
 
+
+bool fftcodec::KeyPressEvaluate(XKeyEvent* p_event)
+{
+    KeySym l_keysym = XLookupKeysym( p_event, 0 );
+    int l_shift = p_event->state&ShiftMask?1:0;
+    switch(l_keysym){
+    case XK_Escape:
+        return false;
+        break;
+    case XK_F1:
+        codec_mode( CODEC_MODE_IDLE );
+        break;
+    case XK_F2:
+        codec_mode( CODEC_MODE_IMPULSE_TEST );
+        break;
+    case XK_F3:
+        codec_mode( CODEC_MODE_SWEEP_TEST );
+        break;
+    case XK_F4:
+        codec_mode( CODEC_MODE_NOISE_FLOOR );
+        break;
+    case XK_F5:
+        codec_mode( CODEC_MODE_IMPULSE_RESPONSE );
+        break;
+    case XK_F6:
+        codec_mode( CODEC_MODE_SYNC_ONLY );
+        break;
+    case XK_1:
+    case XK_KP_1:
+    case XK_KP_End:
+        m_draw_src = DRAW_SRC_RX;
+        break;
+    case XK_2:
+    case XK_KP_2:
+    case XK_KP_Down:
+        m_draw_src = DRAW_SRC_TX;
+        break;
+    case XK_3:
+    case XK_KP_3:
+    case XK_KP_Page_Down:
+        m_draw_src = DRAW_SRC_IMPULSE;
+        break;
+    case XK_n:
+    case XK_N:
+        m_draw_flags ^= DRAW_FLAG_NF;
+        break;
+    case XK_i:
+    case XK_I:
+        m_draw_flags ^= DRAW_FLAG_IR;
+        break;
+    case XK_f:
+    case XK_F:
+        m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LINEAR;
+        break;
+    case XK_l:
+    case XK_L:
+        if( l_shift ){
+            m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LOG_LOG;
+        }else{
+            m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LOG;
+        }
+        break;
+    case XK_s:
+    case XK_S:
+        m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH;
+        break;
+    case XK_c:
+    case XK_C:
+        m_draw_mode = DRAW_MODE_FREQUENCY_CONSTELLATION;
+        break;
+    case XK_t:
+    case XK_T:
+        m_draw_mode = DRAW_MODE_TIME;
+        break;
+//    case XK_r:
+//    case XK_R:
+//        m_draw_mode = DRAW_MODE_IMPULSE;
+//    case XK_s:
+//        break;
+    case XK_p:
+    case XK_P:
+        m_codec_flags |= CODEC_FLAG_PRINT;
+        break;
+    case XK_Up:
+        switch( m_draw_mode ){
+        case DRAW_MODE_TIME:
+            m_draw_time_max /= 2.0;
+            if( m_draw_time_max < 1.0/65536.0){
+                m_draw_time_max = 1.0/65536.0;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LINEAR:
+            m_draw_abs_max /= 2.0;
+            if( m_draw_abs_max < 1/4096.0){
+                m_draw_abs_max = 1/4096.0;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LOG:
+        case DRAW_MODE_FREQUENCY_ABS_LOG_LOG:
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+            if( !l_shift ){
+                // shift the spectrum up by moving the limits down
+                double l_db_range = m_draw_db_max - m_draw_db_min;
+                m_draw_db_min -= 5.0;
+                if( m_draw_db_min < -180.0 ){
+                    m_draw_db_min = -180.0;
+                }
+                m_draw_db_max = m_draw_db_min + l_db_range;
+            }else{
+                // expand the range
+                m_draw_db_max += 5.0;
+                if( m_draw_db_max > 10.0 ){
+                    m_draw_db_max = 10.0;
+                }
+                m_draw_db_min -= 5.0;
+                if( m_draw_db_min < -180.0 ){
+                    m_draw_db_min = -180.0;
+                }
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_CONSTELLATION:
+            m_draw_constellation_max /= 2.0;
+            if( m_draw_constellation_max < 1.0/4096.0 ){
+                m_draw_constellation_max = 1.0/4096.0;
+            }
+            break;
+        }
+        break;
+    case XK_Down:
+        switch( m_draw_mode ){
+        case DRAW_MODE_TIME:
+            m_draw_time_max *= 2.0;
+            if( m_draw_time_max > 1024.0 ){
+                m_draw_time_max = 1024.0;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LINEAR:
+            m_draw_abs_max *= 2.0;
+            if( m_draw_abs_max > 1.0){
+                m_draw_abs_max = 1.0;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LOG:
+        case DRAW_MODE_FREQUENCY_ABS_LOG_LOG:
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+            if( !l_shift ){
+                // shift the spectrum down by moving the limits up
+                double l_db_range = m_draw_db_max - m_draw_db_min;
+                m_draw_db_max += 5.0;
+                if( m_draw_db_max > 10.0 ){
+                    m_draw_db_max = 10.0;
+                }
+                m_draw_db_min = m_draw_db_max - l_db_range;
+            }else{
+                // reduce the range
+                double l_db_range = m_draw_db_max - m_draw_db_min;
+                if( l_db_range > 20.0 ){
+                    m_draw_db_max -= 5.0;
+                    m_draw_db_min += 5.0;
+                }
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_CONSTELLATION:
+            m_draw_constellation_max *= 2.0;
+            if( m_draw_constellation_max > 1.0 ){
+                m_draw_constellation_max = 1.0;
+            }
+            break;
+        }
+        break;
+    case XK_Left:
+        switch( m_draw_mode ){
+        case DRAW_MODE_TIME:
+        case DRAW_MODE_FREQUENCY_CONSTELLATION:
+            if( !l_shift ){
+                m_pvsample->m_fv -= m_pvsample->m_fs/1024/m_nfftsize;
+            }else{
+                m_pvsample->m_fv -= m_pvsample->m_fs/m_nfftsize;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+            if(--m_window_half<0)
+                m_window_half=0;
+            break;
+        default:
+            break;
+        }//	std::complex<double>* l_pdata = p_psrc;
+                //	long n;
+                //	glBegin( GL_LINE_STRIP );
+                //	for(n=0;n<p_npoints;n++){
+                //		double l_x = (double)n/(p_npoints-1);
+                //		double l_y = std::abs(*l_pdata);
+                //
+                //		if( l_y < 1e-9 ) l_y=1e-9;
+                //		l_y = 20.0*log10(l_y);
+                //		glVertex2d( l_x, l_y );
+                //		l_pdata++;
+                //	}
+                //	glEnd();
+
+        break;
+    case XK_Right:
+        switch( m_draw_mode ){
+        case DRAW_MODE_TIME:
+        case DRAW_MODE_FREQUENCY_CONSTELLATION:
+            if( !l_shift ){
+                m_pvsample->m_fv += m_pvsample->m_fs/1024/m_nfftsize;
+            }else{
+                m_pvsample->m_fv += m_pvsample->m_fs/m_nfftsize;
+            }
+            break;
+        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
+            if(++m_window_half>25)
+                m_window_half=25;
+            break;
+        default:
+            break;
+        }
+        break;
+    case XK_space:
+        m_pvsample->m_fv = m_pvsample->m_fs;
+        break;
+    case XK_a:
+        break;
+    case XK_z:
+    case XK_Z:
+        m_pvsample->m_tsample = 0.0;
+        break;
+    default:
+        break;
+    }
+    return true;
+}
+
+void fftcodec::EnterNotifyEvaluate(XEvent *p_event)
+{
+    m_cursor_in_window = true;
+    m_cursor_pos = glm::vec2(
+                p_event->xcrossing.x, p_event->xcrossing.y);
+
+}
+
+void fftcodec::LeaveNotifyEvaluate(XEvent *p_event)
+{
+    m_cursor_in_window = false;
+}
+
+void fftcodec::MotionNotifyEvaluate(XEvent *p_event)
+{
+    m_cursor_pos = glm::vec2(
+                p_event->xmotion.x, p_event->xmotion.y);
+}
+
 double color_func( double p_x )
 {
 	while( p_x <-0.5 ) p_x += 1.0;
@@ -894,6 +1170,16 @@ void fftcodec::spectrum_draw_log( std::complex<double>* p_psrc )
         m_graphy[i] = 20*log10(y);
     }
     m_specgraph->Draw(m_graphy);
+}
+
+void fftcodec::spectrum_draw_log_log( std::complex<double>* p_psrc )
+{
+    for(int i=0;i<m_nspecsize;i++){
+        float y = std::abs(p_psrc[i]);
+        if(y<1e-9)y=1e-9;
+        m_graphy[i] = 20*log10(y);
+    }
+    m_logspecgraph->Draw(m_graphy);
 }
 
 void fftcodec::spectrum_draw_log_smooth(std::complex<double>* p_psrc)
@@ -1039,7 +1325,36 @@ void fftcodec::dspectrum_draw_log_bounds( double* p_psrc, double* p_prms )
 
 }
 
+float alpha_n(int n, int Nfft)
+{
+    return (log((float)n/Nfft)-log(1.0f/(float)Nfft))/
+            (log(0.5f)-log(1.0f/(float)Nfft));
+}
 
+void fftcodec::log_spec_set_x(void)
+{
+    m_graphy[0] = -1.0;
+    float alpha_2 = alpha_n(2,m_nfftsize);
+    float beta = alpha_2/(alpha_2+1.0f);
+    for(int n=1;n<m_nspecsize;n++)
+    {
+        m_graphy[n] = (beta + (1.0f-beta)*alpha_n(n,m_nfftsize))*2.0f - 1.0f;
+    }
+    m_logspecgraph->SetX(m_graphy);
+    m_logspecbeta = beta;
+}
+
+float fftcodec::log_spec_frequency(float alpha_display)
+{
+    if(alpha_display <= m_logspecbeta){
+        float f1 = m_fsamplerate/m_nfftsize;
+        return alpha_display*f1/m_logspecbeta;
+    }else{
+        alpha_display -= m_logspecbeta;
+        alpha_display /= (1.0f - m_logspecbeta);
+        return m_fsamplerate*exp(alpha_display*(log(0.5f)-log(1.0f/(float)m_nfftsize))+log(1.0f/(float)m_nfftsize));
+    }
+}
 
 void spectrum_stats( std::complex<double>* p_psrc, double* p_pmean, double* p_prms, long p_nfftsize, long p_nframes )
 {

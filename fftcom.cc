@@ -25,7 +25,7 @@
 
 #include "fftcodec.h"
 
-#define FFTSIZE 2206
+#define FFTSIZE 2400
 
 jack_client_t* g_pclient;
 
@@ -43,12 +43,11 @@ GLXContext g_context;
 int g_width=400;
 int g_height=400;
 Atom g_wmDeleteMessage;
+Atom g_wmProtocols;
 
-int g_process;
+bool g_process = true;
 int g_samplerate;
 jack_nframes_t g_buffersize;
-
-int g_shiftl=0;
 
 void synthesize_tx_data( void ){
 	int l_samplesize = sizeof(jack_default_audio_sample_t);
@@ -77,233 +76,6 @@ void* process_thread(void* p_arg)
 	}
 	printf("process_thread exiting\n");
 	return NULL;
-}
-
-void KeyPressEvaluate(XKeyEvent* p_event)
-{
-	KeySym l_keysym = XLookupKeysym( p_event, 0 );
-	switch(l_keysym){
-    case XK_Escape:
-        g_process=0;
-        break;
-    case XK_F1:
-        g_pfftcodec->codec_mode( CODEC_MODE_IDLE );
-        break;
-    case XK_F2:
-        g_pfftcodec->codec_mode( CODEC_MODE_IMPULSE_TEST );
-        break;
-    case XK_F3:
-        g_pfftcodec->codec_mode( CODEC_MODE_SWEEP_TEST );
-        break;
-    case XK_F4:
-        g_pfftcodec->codec_mode( CODEC_MODE_NOISE_FLOOR );
-        break;
-    case XK_F5:
-        g_pfftcodec->codec_mode( CODEC_MODE_IMPULSE_RESPONSE );
-        break;
-    case XK_F6:
-        g_pfftcodec->codec_mode( CODEC_MODE_SYNC_ONLY );
-        break;
-    case XK_1:
-    case XK_KP_1:
-    case XK_KP_End:
-        g_pfftcodec->m_draw_src = DRAW_SRC_RX;
-        break;
-    case XK_2:
-    case XK_KP_2:
-    case XK_KP_Down:
-        g_pfftcodec->m_draw_src = DRAW_SRC_TX;
-        break;
-    case XK_3:
-    case XK_KP_3:
-    case XK_KP_Page_Down:
-        g_pfftcodec->m_draw_src = DRAW_SRC_IMPULSE;
-        break;
-    case XK_n:
-    case XK_N:
-        g_pfftcodec->m_draw_flags ^= DRAW_FLAG_NF;
-        break;
-    case XK_i:
-    case XK_I:
-        g_pfftcodec->m_draw_flags ^= DRAW_FLAG_IR;
-        break;
-    case XK_f:
-    case XK_F:
-        g_pfftcodec->m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LINEAR;
-        break;
-    case XK_l:
-    case XK_L:
-        g_pfftcodec->m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LOG;
-        break;
-    case XK_s:
-    case XK_S:
-        g_pfftcodec->m_draw_mode = DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH;
-        break;
-    case XK_c:
-    case XK_C:
-        g_pfftcodec->m_draw_mode = DRAW_MODE_FREQUENCY_CONSTELLATION;
-        break;
-    case XK_t:
-    case XK_T:
-        g_pfftcodec->m_draw_mode = DRAW_MODE_TIME;
-        break;
-//    case XK_r:
-//    case XK_R:
-//        g_pfftcodec->m_draw_mode = DRAW_MODE_IMPULSE;
-//    case XK_s:
-//        break;
-    case XK_p:
-    case XK_P:
-        g_pfftcodec->m_codec_flags |= CODEC_FLAG_PRINT;
-        break;
-    case XK_Up:
-        switch( g_pfftcodec->m_draw_mode ){
-        case DRAW_MODE_TIME:
-            g_pfftcodec->m_draw_time_max /= 2.0;
-            if( g_pfftcodec->m_draw_time_max < 1.0/65536.0){
-                g_pfftcodec->m_draw_time_max = 1.0/65536.0;
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_ABS_LINEAR:
-            g_pfftcodec->m_draw_abs_max /= 2.0;
-            if( g_pfftcodec->m_draw_abs_max < 1/4096.0){
-                g_pfftcodec->m_draw_abs_max = 1/4096.0;
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_ABS_LOG:
-        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
-            if( !g_shiftl ){
-                // shift the spectrum up by moving the limits down
-                double l_db_range = g_pfftcodec->m_draw_db_max - g_pfftcodec->m_draw_db_min;
-                g_pfftcodec->m_draw_db_min -= 5.0;
-                if( g_pfftcodec->m_draw_db_min < -180.0 ){
-                    g_pfftcodec->m_draw_db_min = -180.0;
-                }
-                g_pfftcodec->m_draw_db_max = g_pfftcodec->m_draw_db_min + l_db_range;
-            }else{
-                // expand the range
-                g_pfftcodec->m_draw_db_max += 5.0;
-                if( g_pfftcodec->m_draw_db_max > 10.0 ){
-                    g_pfftcodec->m_draw_db_max = 10.0;
-                }
-                g_pfftcodec->m_draw_db_min -= 5.0;
-                if( g_pfftcodec->m_draw_db_min < -180.0 ){
-                    g_pfftcodec->m_draw_db_min = -180.0;
-                }
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_CONSTELLATION:
-            g_pfftcodec->m_draw_constellation_max /= 2.0;
-            if( g_pfftcodec->m_draw_constellation_max < 1.0/4096.0 ){
-                g_pfftcodec->m_draw_constellation_max = 1.0/4096.0;
-            }
-            break;
-        }
-        break;
-    case XK_Down:
-        switch( g_pfftcodec->m_draw_mode ){
-        case DRAW_MODE_TIME:
-            g_pfftcodec->m_draw_time_max *= 2.0;
-            if( g_pfftcodec->m_draw_time_max > 1024.0 ){
-                g_pfftcodec->m_draw_time_max = 1024.0;
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_ABS_LINEAR:
-            g_pfftcodec->m_draw_abs_max *= 2.0;
-            if( g_pfftcodec->m_draw_abs_max > 1.0){
-                g_pfftcodec->m_draw_abs_max = 1.0;
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_ABS_LOG:
-        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
-            if( !g_shiftl ){
-                // shift the spectrum down by moving the limits up
-                double l_db_range = g_pfftcodec->m_draw_db_max - g_pfftcodec->m_draw_db_min;
-                g_pfftcodec->m_draw_db_max += 5.0;
-                if( g_pfftcodec->m_draw_db_max > 10.0 ){
-                    g_pfftcodec->m_draw_db_max = 10.0;
-                }
-                g_pfftcodec->m_draw_db_min = g_pfftcodec->m_draw_db_max - l_db_range;
-            }else{
-                // reduce the range
-                double l_db_range = g_pfftcodec->m_draw_db_max - g_pfftcodec->m_draw_db_min;
-                if( l_db_range > 20.0 ){
-                    g_pfftcodec->m_draw_db_max -= 5.0;
-                    g_pfftcodec->m_draw_db_min += 5.0;
-                }
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_CONSTELLATION:
-            g_pfftcodec->m_draw_constellation_max *= 2.0;
-            if( g_pfftcodec->m_draw_constellation_max > 1.0 ){
-                g_pfftcodec->m_draw_constellation_max = 1.0;
-            }
-            break;
-        }
-        break;
-    case XK_Left:
-        switch( g_pfftcodec->m_draw_mode ){
-        case DRAW_MODE_TIME:
-        case DRAW_MODE_FREQUENCY_CONSTELLATION:
-            if( !g_shiftl ){
-                g_pfftcodec->m_pvsample->m_fv -= g_pfftcodec->m_pvsample->m_fs/1024/g_pfftcodec->m_nfftsize;
-            }else{
-                g_pfftcodec->m_pvsample->m_fv -= g_pfftcodec->m_pvsample->m_fs/g_pfftcodec->m_nfftsize;
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
-            if(--g_pfftcodec->m_window_half<0)
-                g_pfftcodec->m_window_half=0;
-            break;
-        default:
-            break;
-        }
-        break;
-    case XK_Right:
-        switch( g_pfftcodec->m_draw_mode ){
-        case DRAW_MODE_TIME:
-        case DRAW_MODE_FREQUENCY_CONSTELLATION:
-            if( !g_shiftl ){
-                g_pfftcodec->m_pvsample->m_fv += g_pfftcodec->m_pvsample->m_fs/1024/g_pfftcodec->m_nfftsize;
-            }else{
-                g_pfftcodec->m_pvsample->m_fv += g_pfftcodec->m_pvsample->m_fs/g_pfftcodec->m_nfftsize;
-            }
-            break;
-        case DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH:
-            if(++g_pfftcodec->m_window_half>25)
-                g_pfftcodec->m_window_half=25;
-            break;
-        default:
-            break;
-        }
-        break;
-    case XK_space:
-        g_pfftcodec->m_pvsample->m_fv = g_pfftcodec->m_pvsample->m_fs;
-        break;
-    case XK_a:
-        break;
-    case XK_z:
-    case XK_Z:
-        g_pfftcodec->m_pvsample->m_tsample = 0.0;
-        break;
-    case XK_Shift_L:
-        g_shiftl = 1;
-        break;
-    default:
-        break;
-	}
-}
-
-void KeyReleaseEvaluate(XKeyEvent* p_event)
-{
-	KeySym l_keysym = XLookupKeysym( p_event, 0 );
-	switch(l_keysym){
-		case XK_Shift_L:
-			g_shiftl = 0;
-			break;
-		default:
-			break;
-	}
 }
 
 void ConfigureEvaluate( XConfigureEvent* p_event )
@@ -361,6 +133,10 @@ void glWindowCreate( int argc, char** argv )
 	l_screen_number = DefaultScreen( g_pDisplay );
 	l_root = RootWindow( g_pDisplay, l_screen_number );
 	l_screen = XScreenOfDisplay( g_pDisplay, l_screen_number );
+    int l_screen_width = WidthOfScreen(l_screen);
+    int l_screen_height = HeightOfScreen(l_screen);
+    g_width = l_screen_width/2;
+    g_height = l_screen_height/2;
 	int l_attribs[]={
 		GLX_RGBA,
 		GLX_DOUBLEBUFFER,
@@ -396,9 +172,9 @@ void glWindowCreate( int argc, char** argv )
 	g_window = XCreateWindow(
 		g_pDisplay,
 		l_root,
-		50,50,
+        l_screen_width/4,l_screen_height/4,
 		g_width,g_height,
-		0,
+        4,
 		g_visinfo->depth,
 		InputOutput,
 		g_visinfo->visual,
@@ -407,6 +183,8 @@ void glWindowCreate( int argc, char** argv )
 	XSelectInput( g_pDisplay, g_window,
                   KeyPressMask |
                   KeyReleaseMask |
+                  ButtonPressMask |
+                  ButtonReleaseMask |
                   StructureNotifyMask |
                   EnterWindowMask |
                   LeaveWindowMask |
@@ -419,9 +197,12 @@ void glWindowCreate( int argc, char** argv )
 	}
 	glXMakeCurrent( g_pDisplay, g_window, g_context );
 	swap_interval = (PFNGLXSWAPINTERVALSGIPROC) glXGetProcAddress((unsigned char *)"glXSwapIntervalSGI");
-	swap_interval(1);
+    if(swap_interval){
+        swap_interval(1);
+    }
 	XFree( g_visinfo );
-  g_wmDeleteMessage = XInternAtom( g_pDisplay, "WM_DELETE_WINDOW", False);
+    g_wmDeleteMessage = XInternAtom( g_pDisplay, "WM_DELETE_WINDOW", False);
+    g_wmProtocols = XInternAtom( g_pDisplay, "WM_PROTOCOLS", False);
 	XSetWMProtocols( g_pDisplay, g_window, &g_wmDeleteMessage, 1);
 
 	XIconSize *l_icon_size_list;
@@ -430,8 +211,8 @@ void glWindowCreate( int argc, char** argv )
 	int l_icon_height;
 	if( XGetIconSizes( g_pDisplay, l_root, &l_icon_size_list, &l_icon_size_count ) == 0 ){
 		printf("Window manager doesn't specify icon sizes.\n");
-		l_icon_width = 48;
-		l_icon_height = 48;
+        l_icon_width = 64;
+        l_icon_height = 64;
 	}else{
 		printf("Window manager specifies the following icon sizes.\n");
 		int c;
@@ -481,7 +262,7 @@ void glWindowCreate( int argc, char** argv )
 	XWMHints      *l_wm_hints;
 	XClassHint    *l_class_hint;
 	XTextProperty  l_tp_window_name;
-	char          *l_cp_window_name=(char*)"FFT Based Communication";
+    char          *l_cp_window_name=(char*)"FFTCOM:";
 	XTextProperty  l_tp_icon_name;
 	char          *l_cp_icon_name=(char*)"fftcom";
 
@@ -523,9 +304,8 @@ void glWindowCreate( int argc, char** argv )
 	l_class_hint->res_class = (char*)"fftcom";
 	XSetWMProperties( g_pDisplay, g_window, &l_tp_window_name, &l_tp_icon_name,
                       argv, argc, l_size_hints, l_wm_hints, l_class_hint );
-	
 
-	XMapWindow( g_pDisplay, g_window );
+    XMapWindow( g_pDisplay, g_window );
 	XFree( l_size_hints );
 	XFree( l_wm_hints );
 	XFree( l_class_hint );
@@ -577,7 +357,11 @@ int main(int p_narg, char** p_argv)
 		exit(0);
 	}
 
-	signal(SIGQUIT, signal_handler );
+    char window_name[1024];
+    snprintf(window_name, 1024, "FFTCOM:%s", jack_get_client_name(g_pclient));
+    XStoreName(g_pDisplay, g_window, window_name);
+
+    signal(SIGQUIT, signal_handler );
 	signal(SIGTERM, signal_handler );
 	signal(SIGHUP, signal_handler );
 	signal(SIGINT, signal_handler );
@@ -617,35 +401,32 @@ int main(int p_narg, char** p_argv)
 
 	jack_activate(g_pclient);
 
-	while(g_process){
+    if(!l_status) jack_connect(g_pclient, "system:capture_1", "fftcom:rx");
+
+    while(g_process){
 		while(XPending(g_pDisplay)){
 			XEvent l_event;
 			XNextEvent(g_pDisplay,&l_event);
 			switch(l_event.type){
             case KeyPress:
-                KeyPressEvaluate((XKeyEvent*)&l_event);
-                break;
-            case KeyRelease:
-                KeyReleaseEvaluate((XKeyEvent*)&l_event);
+                g_process = g_pfftcodec->KeyPressEvaluate((XKeyEvent*)&l_event);
                 break;
             case ConfigureNotify:
                 ConfigureEvaluate((XConfigureEvent*)&l_event);
                 break;
             case EnterNotify:
-                g_pfftcodec->m_cursor_in_window = true;
-                g_pfftcodec->m_cursor_pos = glm::vec2(
-                            l_event.xcrossing.x, l_event.xcrossing.y);
+                g_pfftcodec->EnterNotifyEvaluate(&l_event);
                 break;
             case LeaveNotify:
-                g_pfftcodec->m_cursor_in_window = false;
+                g_pfftcodec->LeaveNotifyEvaluate(&l_event);
                 break;
             case MotionNotify:
-                g_pfftcodec->m_cursor_pos = glm::vec2(
-                            l_event.xmotion.x, l_event.xmotion.y);
+                g_pfftcodec->MotionNotifyEvaluate(&l_event);
                 break;
             case ClientMessage:
-                if( l_event.xclient.data.l[0] == g_wmDeleteMessage ){
-                    g_process = 0;
+                if( l_event.xclient.message_type == g_wmProtocols &&
+                    l_event.xclient.data.l[0] == g_wmDeleteMessage ){
+                    g_process = false;
                 }
                 break;
             default:
@@ -657,10 +438,10 @@ int main(int p_narg, char** p_argv)
         g_pfftcodec->draw( g_width, g_height );
 		glXSwapBuffers( g_pDisplay, g_window );
 	}
-
 	printf("waiting for thread to exit\n");
 	pthread_join(g_pthread_process,NULL);
-	
+    jack_deactivate(g_pclient);
+
 clean_up_and_exit:
 	
 	jack_client_close(g_pclient);

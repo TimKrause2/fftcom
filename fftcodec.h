@@ -3,6 +3,8 @@
 #include <pthread.h>
 #include <GL/glew.h>
 #include <X11/Xlib.h>
+#include <X11/X.h>
+#include <X11/keysym.h>
 #include <glm/glm.hpp>
 
 #include "vsample.h"
@@ -17,12 +19,12 @@
 #define NRXSWEEPFRAMES 4
 #define NINITFRAMES 8
 
-#define HUE_TIME1 155.5
+#define HUE_TIME1 130.0
 #define SAT_TIME1 1.0
 #define VAL_TIME1 1.0
-#define HUE_TIME0 155.5
-#define SAT_TIME0 0.580
-#define VAL_TIME0 0.602
+#define HUE_TIME0 133.0
+#define SAT_TIME0 1.0
+#define VAL_TIME0 0.604
 
 #define HUE_FREQ1 0.0
 #define SAT_FREQ1 0.0
@@ -93,6 +95,7 @@ typedef enum {
 	DRAW_MODE_TIME,
 	DRAW_MODE_FREQUENCY_ABS_LINEAR,
 	DRAW_MODE_FREQUENCY_ABS_LOG,
+    DRAW_MODE_FREQUENCY_ABS_LOG_LOG,
     DRAW_MODE_FREQUENCY_ABS_LOG_SMOOTH,
 	DRAW_MODE_FREQUENCY_CONSTELLATION,
 } draw_mode_t;
@@ -163,6 +166,8 @@ public:
     FreeTypeFont* m_font;
     LGraph*       m_timegraph;
     LGraph*       m_specgraph;
+    LGraph*       m_logspecgraph;
+    float         m_logspecbeta;
     PGraph*       m_pgraph;
     int           m_text_height;
 	draw_mode_t   m_draw_mode;
@@ -213,15 +218,22 @@ private:
 
     void spectrum_draw_abs( std::complex<double>* src );
     void spectrum_draw_log( std::complex<double>* src );
+    void spectrum_draw_log_log( std::complex<double>* src );
     void spectrum_draw_log_smooth( std::complex<double>* src );
     void dspectrum_draw_abs( double* src );
     void dspectrum_draw_log( double* src );
     void dspectrum_draw_log_bounds( double* p_px, double* p_prms );
 
+    void log_spec_set_x(void);
+    float log_spec_frequency(float alpha_display);
+
 public:
     void draw_init( Display* p_pDisplay );
     void draw( int p_width, int p_height );
-
+    bool KeyPressEvaluate( XKeyEvent* key_event );
+    void EnterNotifyEvaluate(XEvent *p_event);
+    void LeaveNotifyEvaluate(XEvent *p_event);
+    void MotionNotifyEvaluate(XEvent *p_event);
 };
 
 void color_set( GLdouble* p_v, double p_r, double p_g, double p_b );
